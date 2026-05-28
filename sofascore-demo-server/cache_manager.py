@@ -105,10 +105,144 @@ class PocketBaseCacheManager:
             except ClientResponseError:
                 self.client.collection("squads").create(payload)
                 print(f"[CACHE] Đã lưu mới Đội hình của Team ID {team_id}.")
+
+            await self.cache_players_from_squad(team_id, squad_data)
         except Exception as e:
             print(f"[CACHE ERROR] Lỗi set_squad_cache: {e}")
 
-    # --- TEAM (THÔNG TIN ĐỘI BÓNG) CACHING ---
+    # --- BASIC PLAYER CACHE FROM SQUAD ---
+
+    async def cache_players_from_squad(self, team_id: int, squad_data: dict, ttl_days: int = 7):
+        """
+        Parse basic player objects from squad JSON into the players collection.
+        """
+        players = (squad_data or {}).get("players") or []
+        parsed_count = 0
+
+        for entry in players:
+            player_info = (entry or {}).get("player") or {}
+            player_id = player_info.get("id")
+            if not player_id:
+                continue
+
+            await self.set_basic_player_cache(player_id, player_info, team_id, ttl_days=ttl_days)
+            parsed_count += 1
+
+        if parsed_count:
+            print(f"[CACHE] Parsed {parsed_count} basic players from Squad Team ID {team_id}.")
+
+    async def set_basic_player_cache(self, player_id: int, player_info: dict, team_id: Optional[int] = None, ttl_days: int = 7):
+        """
+        Store basic player data from squad without overwriting full attributes.
+        """
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expired_time = now + datetime.timedelta(days=ttl_days)
+        avatar_url = f"https://img.sofascore.com/api/v1/player/{player_id}/image"
+
+        try:
+            existing_record = None
+            existing_raw = {}
+            existing_attrs = {}
+
+            try:
+                existing_record = self.client.collection("players").get_first_list_item(
+                    f"sofascore_id = '{player_id}'"
+                )
+                existing_raw = existing_record.raw_json or {}
+                existing_attrs = existing_record.attributes or {}
+            except ClientResponseError:
+                pass
+
+            existing_player = existing_raw.get("player") or {}
+            if existing_attrs:
+                merged_player = {
+                    **(player_info or {}),
+                    **existing_player
+                }
+            else:
+                merged_player = {
+                    **existing_player,
+                    **(player_info or {})
+                }
+            if team_id and "cached_from_team_id" not in merged_player:
+                merged_player["cached_from_team_id"] = team_id
+
+            raw_json = {
+                **existing_raw,
+                "player": merged_player,
+                "cache_status": "full" if existing_attrs else "basic"
+            }
+
+            payload = {
+                "sofascore_id": str(player_id),
+                "name": merged_player.get("name"),
+                "position": merged_player.get("position"),
+                "height": merged_player.get("height", 0),
+                "preferredFoot": merged_player.get("preferredFoot", "Không rõ"),
+                "marketValue": merged_player.get("proposedMarketValue", 0),
+                "avatar_url": avatar_url,
+                "attributes": existing_attrs,
+                "raw_json": raw_json,
+                "ttl_expired": expired_time.isoformat()
+            }
+
+            if existing_record:
+                self.client.collection("players").update(existing_record.id, payload)
+            else:
+                self.client.collection("players").create(payload)
+        except Exception as e:
+            print(f"[CACHE ERROR] Loi set_basic_player_cache Player ID {player_id}: {e}")
+
+    # --- TEAM TRANSFERS CACHING ---
+
+    async def get_transfer_cache(self, team_id: int) -> Optional[dict]:
+        """
+        Lay cache chuyen nhuong cua cau lac bo.
+        """
+        try:
+            record = self.client.collection("team_transfers").get_first_list_item(
+                f"sofascore_id = '{team_id}'"
+            )
+            expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+            if datetime.datetime.now(datetime.timezone.utc) > expired_time:
+                print(f"[CACHE] Du lieu chuyen nhuong Team ID {team_id} da qua han TTL.")
+                return None
+
+            print(f"[CACHE HIT] Lay chuyen nhuong Team ID {team_id} tu PocketBase.")
+            return record.transfers_json
+        except ClientResponseError:
+            return None
+        except Exception as e:
+            print(f"[CACHE ERROR] Loi get_transfer_cache: {e}")
+            return None
+
+    async def set_transfer_cache(self, team_id: int, transfer_data: dict, ttl_hours: int = 24):
+        """
+        Luu cache chuyen nhuong cau lac bo.
+        """
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expired_time = now + datetime.timedelta(hours=ttl_hours)
+
+        payload = {
+            "sofascore_id": str(team_id),
+            "transfers_json": transfer_data,
+            "ttl_expired": expired_time.isoformat()
+        }
+
+        try:
+            try:
+                exist_rec = self.client.collection("team_transfers").get_first_list_item(
+                    f"sofascore_id = '{team_id}'"
+                )
+                self.client.collection("team_transfers").update(exist_rec.id, payload)
+                print(f"[CACHE] Da cap nhat chuyen nhuong Team ID {team_id}.")
+            except ClientResponseError:
+                self.client.collection("team_transfers").create(payload)
+                print(f"[CACHE] Da luu moi chuyen nhuong Team ID {team_id}.")
+        except Exception as e:
+            print(f"[CACHE ERROR] Loi set_transfer_cache: {e}")
+
+    # --- TEAM (THONG TIN DOI BONG) CACHING ---
 
     async def get_team_cache(self, team_id: int) -> Optional[dict]:
         """
@@ -124,7 +258,7 @@ class PocketBaseCacheManager:
                 print(f"[CACHE] Dữ liệu Team ID {team_id} đã quá hạn TTL.")
                 return None
                 
-            raw_json = record.raw_json
+            raw_json = record.raw_json or {}
             
             # Nếu có tệp ảnh logo đã cache cục bộ, ghi đè link ảnh động của Sofascore bằng link tĩnh PB
             if record.logo_file and "team" in raw_json:
@@ -181,7 +315,152 @@ class PocketBaseCacheManager:
         except Exception as e:
             print(f"[CACHE ERROR] Lỗi set_team_cache: {e}")
 
-    # --- PLAYER (HỒ SƠ CẦU THỦ) CACHING ---
+    # --- TEAM SEARCH CACHE ---
+
+    async def search_team_cache(self, query: str, sport: Optional[str] = None, limit: int = 10) -> dict:
+        """
+        Tim doi bong trong cache PocketBase truoc khi goi API ngoai.
+        Tra ve dung shape cua endpoint /api/search de frontend co the dung lai.
+        """
+        query_norm = (query or "").strip().casefold()
+        sport_norm = (sport or "").strip().casefold()
+        if not query_norm:
+            return {"results": []}
+
+        try:
+            records = self.client.collection("teams").get_full_list(
+                batch=200,
+                query_params={"sort": "-updated"}
+            )
+            now = datetime.datetime.now(datetime.timezone.utc)
+            results = []
+
+            for record in records:
+                expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+                if now > expired_time:
+                    continue
+
+                raw_json = record.raw_json or {}
+                team = raw_json.get("team") or {}
+                if not team:
+                    continue
+
+                team_sport = (team.get("sport") or {}).get("slug", "").casefold()
+                if sport_norm and team_sport and team_sport != sport_norm:
+                    continue
+
+                searchable_values = [
+                    team.get("name"),
+                    team.get("fullName"),
+                    team.get("shortName"),
+                    team.get("nameCode"),
+                    team.get("slug"),
+                ]
+                searchable_text = " ".join(str(value).casefold() for value in searchable_values if value)
+                if query_norm not in searchable_text:
+                    continue
+
+                if record.logo_file:
+                    team["logo_url_local"] = f"{self.pb_url}/api/files/{record.collection_name}/{record.id}/{record.logo_file}"
+
+                results.append({
+                    "type": "team",
+                    "entity": team
+                })
+
+                if len(results) >= limit:
+                    break
+
+            if results:
+                print(f"[CACHE HIT] Tim thay {len(results)} doi bong trong cache voi tu khoa '{query}'.")
+
+            return {"results": results}
+        except Exception as e:
+            print(f"[CACHE ERROR] Loi search_team_cache: {e}")
+            return {"results": []}
+
+    async def search_player_cache(self, query: str, sport: Optional[str] = None, limit: int = 10) -> dict:
+        """
+        Tim cau thu trong cache PocketBase truoc khi goi API ngoai.
+        """
+        query_norm = (query or "").strip().casefold()
+        sport_norm = (sport or "").strip().casefold()
+        if not query_norm:
+            return {"results": []}
+
+        try:
+            records = self.client.collection("players").get_full_list(
+                batch=200,
+                query_params={"sort": "-updated"}
+            )
+            now = datetime.datetime.now(datetime.timezone.utc)
+            results = []
+
+            for record in records:
+                expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+                if now > expired_time:
+                    continue
+
+                raw_json = record.raw_json or {}
+                player = raw_json.get("player") or {}
+                if not player:
+                    continue
+
+                player_sport = (player.get("sport") or {}).get("slug", "").casefold()
+                team_sport = ((player.get("team") or {}).get("sport") or {}).get("slug", "").casefold()
+                if sport_norm and player_sport and player_sport != sport_norm:
+                    continue
+                if sport_norm and not player_sport and team_sport and team_sport != sport_norm:
+                    continue
+
+                searchable_values = [
+                    player.get("name"),
+                    player.get("fullName"),
+                    player.get("shortName"),
+                    player.get("firstName"),
+                    player.get("lastName"),
+                    player.get("slug"),
+                ]
+                searchable_text = " ".join(str(value).casefold() for value in searchable_values if value)
+                if query_norm not in searchable_text:
+                    continue
+
+                if record.avatar_file:
+                    player["avatar_url_local"] = f"{self.pb_url}/api/files/{record.collection_name}/{record.id}/{record.avatar_file}"
+
+                results.append({
+                    "type": "player",
+                    "entity": player,
+                    "cache_status": raw_json.get("cache_status") or ("full" if record.attributes else "basic")
+                })
+
+                if len(results) >= limit:
+                    break
+
+            if results:
+                print(f"[CACHE HIT] Tim thay {len(results)} cau thu trong cache voi tu khoa '{query}'.")
+
+            return {"results": results}
+        except Exception as e:
+            print(f"[CACHE ERROR] Loi search_player_cache: {e}")
+            return {"results": []}
+
+    async def search_cache(self, query: str, sport: Optional[str] = None, limit: int = 10) -> dict:
+        """
+        Search all cached entities currently persisted in PocketBase.
+        """
+        results = []
+
+        team_results = await self.search_team_cache(query, sport=sport, limit=limit)
+        results.extend(team_results.get("results") or [])
+
+        if len(results) < limit:
+            player_results = await self.search_player_cache(query, sport=sport, limit=limit - len(results))
+            results.extend(player_results.get("results") or [])
+
+        return {"results": results[:limit]}
+
+    # --- PLAYER (HO SO CAU THU) CACHING ---
 
     async def get_player_cache(self, player_id: int) -> Optional[dict]:
         """
@@ -205,7 +484,8 @@ class PocketBaseCacheManager:
                 raw_json["player"]["avatar_url_local"] = local_avatar_url
                 
             # Đảm bảo trả về cả attributes đã cache
-            raw_json["attributes"] = record.attributes
+            raw_json["attributes"] = record.attributes or {}
+            raw_json["cache_status"] = "full" if raw_json["attributes"] else "basic"
             
             print(f"[CACHE HIT] Lấy thông tin Cầu thủ ID {player_id} từ PocketBase.")
             return raw_json
@@ -222,6 +502,8 @@ class PocketBaseCacheManager:
         now = datetime.datetime.now(datetime.timezone.utc)
         expired_time = now + datetime.timedelta(days=ttl_days)
         
+        player_data = player_data or {}
+        player_data["cache_status"] = "full"
         player_info = player_data.get("player", {})
         avatar_url = f"https://img.sofascore.com/api/v1/player/{player_id}/image"
         

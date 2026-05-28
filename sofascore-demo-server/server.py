@@ -155,8 +155,22 @@ async def api_search(q: str, sport: str = "football"):
     if not q:
         raise HTTPException(status_code=400, detail="Vui lòng cung cấp tham số tìm kiếm 'q'")
     try:
+        cached_res = await cache_manager.search_cache(q, sport=sport)
+        if cached_res.get("results"):
+            return cached_res
+
         search = Search(api_instance, q)
         res = await search.search_all(sport=sport)
+        for item in res.get("results", []):
+            entity = item.get("entity") or {}
+            entity_id = entity.get("id")
+            if not entity_id:
+                continue
+
+            if item.get("type") == "team":
+                asyncio.create_task(cache_manager.set_team_cache(entity_id, {"team": entity}))
+            elif item.get("type") == "player":
+                asyncio.create_task(cache_manager.set_basic_player_cache(entity_id, entity))
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -212,14 +226,22 @@ async def api_team_transfers(team_id: int):
     """
     Lấy lịch sử chuyển nhượng cầu thủ mới nhất của câu lạc bộ
     """
+    cached_data = await cache_manager.get_transfer_cache(team_id)
+    if cached_data:
+        return cached_data
+
     try:
         team_obj = Team(api_instance, team_id=team_id)
         trans_in = await team_obj.transfers_in()
         trans_out = await team_obj.transfers_out()
-        return {
+        res = {
             "transfers_in": trans_in,
             "transfers_out": trans_out
         }
+
+        asyncio.create_task(cache_manager.set_transfer_cache(team_id, res))
+
+        return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -252,10 +274,11 @@ async def api_player_detail(player_id: int):
     """
     # 1. Thử lấy từ cache PocketBase trước
     cached_data = await cache_manager.get_player_cache(player_id)
-    if cached_data:
+    cached_attributes = (cached_data or {}).get("attributes") or {}
+    if cached_data and cached_attributes:
         return cached_data
 
-    # 2. Cache MISS -> Gọi wrapper
+    # 2. Cache MISS hoặc chỉ có thông tin cơ bản -> Gọi wrapper bổ sung
     try:
         player_obj = Player(api_instance, player_id=player_id)
         detail = await player_obj.get_player()
@@ -269,6 +292,8 @@ async def api_player_detail(player_id: int):
             "attributes": attrs
         }
     except Exception as e:
+        if cached_data:
+            return cached_data
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/league/{league_id}/standings")
@@ -288,7 +313,8 @@ async def api_league_standings(league_id: int, season: Optional[int] = None):
             
         # 1. Thử lấy từ cache PocketBase trước
         cached_data = await cache_manager.get_league_cache(league_id, season)
-        if cached_data:
+        cached_league = (cached_data or {}).get("league") or {}
+        if cached_data and cached_league.get("name"):
             return cached_data
 
         # 2. Cache MISS -> Gọi wrapper để lấy dữ liệu mới từ Sofascore
@@ -297,15 +323,23 @@ async def api_league_standings(league_id: int, season: Optional[int] = None):
         # Lấy thêm thông tin chi tiết giải đấu để điền vào cache (Name, Country, Flag)
         try:
             league_info = await league_obj.get_league()
+            league_info = league_info.get("uniqueTournament") or league_info
+            category = league_info.get("category") or {}
             name = league_info.get("name", "")
-            country = league_info.get("category", {}).get("name", "")
-            flag = league_info.get("category", {}).get("flag", "")
+            country = category.get("name", "")
+            flag = category.get("flag", "")
         except Exception as info_err:
             print(f"[Server Warning] Không lấy được thông tin chi tiết giải đấu {league_id}: {info_err}")
             name, country, flag = "", "", ""
 
         response_data = {
             "season_id": season,
+            "league": {
+                "id": league_id,
+                "name": name,
+                "country": country,
+                "flag": flag
+            },
             "standings": res
         }
 

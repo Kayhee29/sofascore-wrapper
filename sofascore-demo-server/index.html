@@ -643,6 +643,72 @@
 
     const API_BASE = "http://127.0.0.1:8000";
     const WS_BASE = "ws://127.0.0.1:8000/ws/live";
+    const DETAIL_CACHE_TTL_MS = 10 * 60 * 1000;
+    const apiResponseCache = new Map();
+
+    async function getCachedJson(cacheKey, url, ttlMs = DETAIL_CACHE_TTL_MS) {
+        const now = Date.now();
+        const cached = apiResponseCache.get(cacheKey);
+
+        if (cached && now - cached.timestamp < ttlMs) {
+            return cached.promise || cached.data;
+        }
+
+        const promise = fetch(url)
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status} khi goi ${url}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                apiResponseCache.set(cacheKey, {
+                    timestamp: Date.now(),
+                    data
+                });
+                return data;
+            })
+            .catch(err => {
+                apiResponseCache.delete(cacheKey);
+                throw err;
+            });
+
+        apiResponseCache.set(cacheKey, {
+            timestamp: now,
+            promise
+        });
+
+        return promise;
+    }
+
+    function getFreshCachedData(cacheKey, ttlMs = DETAIL_CACHE_TTL_MS) {
+        const cached = apiResponseCache.get(cacheKey);
+        if (!cached || cached.promise || Date.now() - cached.timestamp >= ttlMs) {
+            return null;
+        }
+        return cached.data;
+    }
+
+    function setCachedData(cacheKey, data) {
+        apiResponseCache.set(cacheKey, {
+            timestamp: Date.now(),
+            data
+        });
+    }
+
+    function hasPlayerAttributes(data) {
+        return Boolean(data && data.attributes && Object.keys(data.attributes).length > 0);
+    }
+
+    async function fetchAndCacheJson(cacheKey, url) {
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status} khi goi ${url}`);
+        }
+        const data = await res.json();
+        setCachedData(cacheKey, data);
+        return data;
+    }
     
     let activeMatches = {}; // Lưu trữ danh sách các trận đấu đang phát trực tiếp
 
@@ -759,8 +825,10 @@
         resultsContainer.innerHTML = `<div style="text-align: center; padding: 2rem 0; color: var(--text-secondary)">Đang truy vấn dữ liệu cũ qua REST API...</div>`;
 
         try {
-            const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}`);
-            const data = await res.json();
+            const data = await getCachedJson(
+                `search:football:${query.toLowerCase()}`,
+                `${API_BASE}/api/search?q=${encodeURIComponent(query)}`
+            );
             
             const results = data.results || [];
             
@@ -771,9 +839,9 @@
 
             resultsContainer.innerHTML = "";
             results.forEach(item => {
-                // Chỉ lấy các thực thể là đội bóng (team)
                 if (item.type === "team") {
                     const entity = item.entity;
+                    setCachedData(`team:${entity.id}`, { team: entity });
                     const itemEl = document.createElement('div');
                     itemEl.className = 'result-item';
                     itemEl.onclick = () => showTeamDetails(entity.id);
@@ -786,11 +854,32 @@
                         <span class="category-tag">${entity.sport?.name || 'Bóng đá'}</span>
                     `;
                     resultsContainer.appendChild(itemEl);
+                } else if (item.type === "player") {
+                    const entity = item.entity;
+                    const teamId = entity.team?.id || entity.cached_from_team_id || null;
+                    setCachedData(`player-basic:${entity.id}`, {
+                        player: entity,
+                        attributes: {},
+                        cache_status: item.cache_status || "basic"
+                    });
+
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'result-item';
+                    itemEl.onclick = () => showPlayerProfile(entity.id, teamId);
+
+                    itemEl.innerHTML = `
+                        <div class="result-info">
+                            <h4>${entity.name}</h4>
+                            <p>${entity.team?.name || 'Không rõ CLB'} | ${positionNameFull(entity.position)}</p>
+                        </div>
+                        <span class="category-tag">Cầu thủ</span>
+                    `;
+                    resultsContainer.appendChild(itemEl);
                 }
             });
 
             if (resultsContainer.children.length === 0) {
-                resultsContainer.innerHTML = `<div style="text-align: center; padding: 2rem 0; color: var(--text-secondary)">Không tìm thấy đội bóng nào.</div>`;
+                resultsContainer.innerHTML = `<div style="text-align: center; padding: 2rem 0; color: var(--text-secondary)">Không tìm thấy kết quả phù hợp.</div>`;
             }
         } catch (err) {
             console.error("Lỗi khi tìm kiếm câu lạc bộ:", err);
@@ -805,15 +894,29 @@
 
         try {
             // Lấy thông tin đội bóng, chuyển nhượng và đội hình song song
-            const [teamRes, transRes, squadRes] = await Promise.all([
-                fetch(`${API_BASE}/api/team/${teamId}`),
-                fetch(`${API_BASE}/api/team/${teamId}/transfers`),
-                fetch(`${API_BASE}/api/team/${teamId}/players`)
+            const [teamResult, transResult, squadResult] = await Promise.allSettled([
+                getCachedJson(`team:${teamId}`, `${API_BASE}/api/team/${teamId}`),
+                getCachedJson(`team:${teamId}:transfers`, `${API_BASE}/api/team/${teamId}/transfers`),
+                getCachedJson(`team:${teamId}:players`, `${API_BASE}/api/team/${teamId}/players`)
             ]);
-            
-            const teamData = await teamRes.json();
-            const transData = await transRes.json();
-            const squadData = await squadRes.json();
+
+            if (teamResult.status === "rejected") {
+                throw teamResult.reason;
+            }
+            if (transResult.status === "rejected") {
+                console.warn("Khong tai duoc du lieu chuyen nhuong:", transResult.reason);
+            }
+            if (squadResult.status === "rejected") {
+                console.warn("Khong tai duoc du lieu doi hinh:", squadResult.reason);
+            }
+
+            const teamData = teamResult.value;
+            const transData = transResult.status === "fulfilled"
+                ? transResult.value
+                : { transfers_in: [], transfers_out: [] };
+            const squadData = squadResult.status === "fulfilled"
+                ? squadResult.value
+                : { players: [] };
             
             const team = teamData.team || {};
             const managerName = team.manager?.name || "Không rõ";
@@ -842,6 +945,13 @@
             
             players.forEach(p => {
                 const playerObj = p.player || {};
+                if (playerObj.id) {
+                    setCachedData(`player-basic:${playerObj.id}`, {
+                        player: playerObj,
+                        attributes: {},
+                        cache_status: "basic"
+                    });
+                }
                 const pos = playerObj.position || "M";
                 if (groupedPlayers[pos]) {
                     groupedPlayers[pos].push(playerObj);
@@ -934,12 +1044,119 @@
     }
 
     // --- HIỂN THỊ THÔNG TIN CHI TIẾT CẦU THỦ (MODAL PROFILE) ---
+    function renderPlayerProfile(playerId, teamId, data, isRefreshing = false) {
+        const player = data.player || {};
+        const attrs = data.attributes || {};
+        const overview = (attrs.playerAttributeOverviews && attrs.playerAttributeOverviews[0]) || {};
+        const loadingText = isRefreshing
+            ? `<p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">Dang bo sung du lieu chi tiet...</p>`
+            : "";
+        const backButton = teamId
+            ? `<button class="btn-search" style="margin-bottom: 1.5rem; padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="showTeamDetails(${teamId})">&larr; QUAY LẠI ĐỘI BÓNG</button>`
+            : "";
+
+        modalBody.innerHTML = `
+            ${backButton}
+            
+            <div class="profile-container">
+                <div class="profile-header" style="display: flex; align-items: center; gap: 1.5rem;">
+                    <img src="${player.avatar_url_local || `https://img.sofascore.com/api/v1/player/${playerId}/image`}" alt="${player.name || 'Player'}" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.05); border: 2px solid var(--primary-glow); padding: 2px;" onerror="this.src='https://www.sofascore.com/static/images/placeholders/player.png'">
+                    <div>
+                        <h3 style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, var(--accent-glow), var(--primary-glow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                            ${player.fullName || player.name || 'Cáº§u thá»§'}
+                        </h3>
+                        <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.3rem; font-weight: 500;">
+                            Sá»‘ Ã¡o: ${player.shirtNumber || player.jerseyNumber || 'N/A'} | Vá»‹ trÃ­: ${positionNameFull(player.position)}
+                        </p>
+                        ${loadingText}
+                    </div>
+                </div>
+
+                <div class="details-grid">
+                    <div class="detail-card">
+                        <label>Chiá»u cao</label>
+                        <p>${player.height ? player.height + ' cm' : 'KhÃ´ng rÃµ'}</p>
+                    </div>
+                    <div class="detail-card">
+                        <label>ChÃ¢n thuáº­n</label>
+                        <p>${preferredFootVi(player.preferredFoot)}</p>
+                    </div>
+                    <div class="detail-card">
+                        <label>GiÃ¡ trá»‹ thá»‹ trÆ°á»ng</label>
+                        <p>${player.proposedMarketValue ? 'â‚¬' + (player.proposedMarketValue / 1000000).toFixed(1) + 'M' : 'N/A'}</p>
+                    </div>
+                    <div class="detail-card">
+                        <label>Quá»‘c tá»‹ch</label>
+                        <p>${player.country?.name || 'KhÃ´ng rÃµ'}</p>
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Chá»‰ sá»‘ Ká»¹ thuáº­t & TÆ° duy chiáº¿n thuáº­t</h4>
+                <div class="radar-stats">
+                    ${[
+                        { label: "Táº¥n cÃ´ng (Attacking)", val: overview.attacking || 50 },
+                        { label: "Ká»¹ thuáº­t (Technical)", val: overview.technical || 50 },
+                        { label: "Chiáº¿n thuáº­t (Tactical)", val: overview.tactical || 50 },
+                        { label: "PhÃ²ng ngá»± (Defending)", val: overview.defending || 50 },
+                        { label: "SÃ¡ng táº¡o (Creativity)", val: overview.creativity || 50 }
+                    ].map(item => `
+                        <div class="radar-bar-container">
+                            <span class="radar-label" style="font-size: 0.85rem; font-weight: 600; width: 140px;">${item.label}</span>
+                            <div class="radar-track">
+                                <div class="radar-fill" id="bar-${item.label.replace(/[^a-zA-Z]/g, '')}" style="width: 0%"></div>
+                            </div>
+                            <span class="radar-val-num" style="font-size: 0.85rem; font-weight: 700; width: 30px; text-align: right; color: var(--accent-glow);">${item.val}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+
+        setTimeout(() => {
+            const stats = [
+                { label: "Táº¥n cÃ´ng (Attacking)", val: overview.attacking || 50 },
+                { label: "Ká»¹ thuáº­t (Technical)", val: overview.technical || 50 },
+                { label: "Chiáº¿n thuáº­t (Tactical)", val: overview.tactical || 50 },
+                { label: "PhÃ²ng ngá»± (Defending)", val: overview.defending || 50 },
+                { label: "SÃ¡ng táº¡o (Creativity)", val: overview.creativity || 50 }
+            ];
+            stats.forEach(item => {
+                const el = document.getElementById(`bar-${item.label.replace(/[^a-zA-Z]/g, '')}`);
+                if (el) el.style.width = `${item.val}%`;
+            });
+        }, 100);
+    }
+
     async function showPlayerProfile(playerId, teamId) {
+        const fullCacheKey = `player:${playerId}`;
+        const basicCacheKey = `player-basic:${playerId}`;
+        const cachedFull = getFreshCachedData(fullCacheKey);
+        const cachedBasic = getFreshCachedData(basicCacheKey);
+
+        if (cachedFull) {
+            renderPlayerProfile(playerId, teamId, cachedFull, !hasPlayerAttributes(cachedFull));
+            if (hasPlayerAttributes(cachedFull)) return;
+        } else if (cachedBasic) {
+            renderPlayerProfile(playerId, teamId, cachedBasic, true);
+        } else {
+            modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Dang nap ho so cau thu tu cache...</div>`;
+        }
+
+        try {
+            const data = await fetchAndCacheJson(fullCacheKey, `${API_BASE}/api/player/${playerId}`);
+            renderPlayerProfile(playerId, teamId, data, false);
+        } catch (err) {
+            console.error("Loi tai chi tiet cau thu:", err);
+            if (!cachedFull && !cachedBasic) {
+                modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: #ff3b30">Loi khi tai thong tin cau thu tu REST API.</div>`;
+            }
+        }
+        return;
+
         modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Đang nạp hồ sơ cầu thủ từ REST API...</div>`;
 
         try {
-            const res = await fetch(`${API_BASE}/api/player/${playerId}`);
-            const data = await res.json();
+            const data = await getCachedJson(`player:${playerId}`, `${API_BASE}/api/player/${playerId}`);
             
             const player = data.player || {};
             const attrs = data.attributes || {};

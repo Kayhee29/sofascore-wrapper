@@ -115,6 +115,18 @@ def create_collections(token):
             "indexes": [
                 "CREATE UNIQUE INDEX idx_squad_sofascore_id ON squads (sofascore_id)"
             ]
+        },
+        {
+            "name": "team_transfers",
+            "type": "base",
+            "schema": [
+                {"name": "sofascore_id", "type": "text", "required": True, "options": {"min": 1}},
+                {"name": "transfers_json", "type": "json", "options": {"maxSize": 10485760}},
+                {"name": "ttl_expired", "type": "date"}
+            ],
+            "indexes": [
+                "CREATE UNIQUE INDEX idx_team_transfers_sofascore_id ON team_transfers (sofascore_id)"
+            ]
         }
     ]
     
@@ -124,7 +136,7 @@ def create_collections(token):
         resp = httpx.post(url, json=col, headers=headers, timeout=5.0)
         if resp.status_code == 200:
             print(f"[INIT] Đã tạo thành công Collection '{col['name']}'")
-        elif resp.status_code == 400 and "already exists" in resp.text:
+        elif resp.status_code == 400 and ("already exists" in resp.text or "validation_collection_name_exists" in resp.text):
             print(f"[INIT] Collection '{col['name']}' đã tồn tại sẵn.")
         else:
             print(f"[INIT] Lỗi khi tạo Collection '{col['name']}': {resp.text}")
