@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sofascore Realtime Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0c0819;
+            --surface-color: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.07);
+            --primary-glow: #9e43ff;
+            --accent-glow: #00f0ff;
+            --success-color: #39ff14;
+            --text-primary: #f0ecfa;
+            --text-secondary: #a39eb5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(158, 67, 255, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 240, 255, 0.1) 0%, transparent 40%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* --- HEADER --- */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .logo-section h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #00f0ff, #9e43ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-section p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.2rem;
+        }
+
+        .connection-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ff3b30;
+            box-shadow: 0 0 10px #ff3b30;
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.online {
+            background-color: var(--success-color);
+            box-shadow: 0 0 10px var(--success-color);
+        }
+
+        /* --- LAYOUT GRID --- */
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1.8fr 1.2fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .layout-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* --- CARD STYLING (GLASSMORPHISM) --- */
+        .glass-card {
+            background: var(--surface-color);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.8rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .badge-live {
+            background: linear-gradient(135deg, #ff3b30, #ff9500);
+            padding: 0.25rem 0.6rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            animation: pulse 2s infinite;
+        }
+
+        /* --- SEARCH API CONSOLE --- */
+        .search-bar {
+            display: flex;
+            gap: 0.8rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-input {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            padding: 0.8rem 1.2rem;
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary-glow);
+            box-shadow: 0 0 10px rgba(158, 67, 255, 0.2);
+        }
+
+        .btn-search {
+            background: linear-gradient(135deg, var(--primary-glow), #bf3bf2);
+            color: white;
+            border: none;
+            padding: 0 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-search:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(158, 67, 255, 0.4);
+        }
+
+        /* --- RESULTS --- */
+        .results-container {
+            max-height: 500px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            padding-right: 0.5rem;
+        }
+
+        .result-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .result-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--accent-glow);
+            transform: scale(1.01);
+        }
+
+        .result-info h4 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .result-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.2rem;
+        }
+
+        .category-tag {
+            font-size: 0.75rem;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-glow);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        /* --- REALTIME STREAMS (FOOTBALL LIVE) --- */
+        .live-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 700px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .match-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            transition: all 0.5s ease;
+            overflow: hidden;
+        }
+
+        /* Hiệu ứng nhấp nháy phát sáng khi có thay đổi tỉ số (Micro-animation) */
+        .match-card.flash-update {
+            animation: flashGlow 1.2s ease-out;
+        }
+
+        .match-card-main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .team-display {
+            flex: 1;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .team-display.home {
+            text-align: right;
+        }
+
+        .team-display.away {
+            text-align: left;
+        }
+
+        .score-display {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1.2rem;
+            border-radius: 12px;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-primary);
+            text-align: center;
+            min-width: 90px;
+            transition: all 0.3s ease;
+        }
+
+        .score-display.live-active {
+            color: var(--success-color);
+            border-color: var(--success-color);
+            text-shadow: 0 0 8px rgba(57, 255, 20, 0.5);
+        }
+
+        .match-card-meta {
+            position: absolute;
+            top: 0.5rem;
+            left: 1.2rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .match-status-tag {
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .match-status-tag.active {
+            background: rgba(57, 255, 20, 0.1);
+            color: var(--success-color);
+        }
+
+        /* --- SCROLLBAR --- */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* --- DETAILS OVERLAY --- */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(12, 8, 25, 0.85);
+            backdrop-filter: blur(15px);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .details-modal {
+            background: rgba(25, 18, 44, 0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2.5rem;
+            max-width: 800px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(158, 67, 255, 0.3);
+            position: relative;
+            transform: scale(0.9);
+            transition: all 0.3s ease;
+        }
+
+        /* --- PLAYER CARDS STYLING --- */
+        .player-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .player-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .player-card:hover {
+            background: rgba(158, 67, 255, 0.05);
+            border-color: var(--primary-glow);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(158, 67, 255, 0.15);
+        }
+
+        .player-number {
+            font-size: 0.75rem;
+            color: var(--accent-glow);
+            font-weight: 700;
+        }
+
+        .player-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-val {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* --- PLAYER PROFILE OVERLAY STYLING --- */
+        .profile-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+        }
+
+        .profile-header h3 {
+            font-size: 2rem;
+            background: linear-gradient(to right, var(--accent-glow), var(--primary-glow));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .radar-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .radar-bar-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .radar-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            width: 100px;
+        }
+
+        .radar-track {
+            flex: 1;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .radar-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--accent-glow), var(--primary-glow));
+            border-radius: 4px;
+            width: 0%;
+            transition: width 1s ease-out;
+        }
+
+        .radar-val-num {
+            font-size: 0.85rem;
+            font-weight: 700;
+            width: 30px;
+            text-align: right;
+        }
+
+        .overlay.active .details-modal {
+            transform: scale(1);
+        }
+
+        .btn-close {
+            position: absolute;
+            top: 1.2rem;
+            right: 1.2rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.8rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .btn-close:hover {
+            color: white;
+        }
+
+        .modal-body h3 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-body .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 12px;
+        }
+
+        .detail-card label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .detail-card p {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 0.2rem;
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes flashGlow {
+            0% {
+                background: rgba(158, 67, 255, 0.2);
+                border-color: var(--primary-glow);
+                box-shadow: 0 0 25px rgba(158, 67, 255, 0.6);
+            }
+            100% {
+                background: rgba(255, 255, 255, 0.02);
+                border-color: var(--border-color);
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- HEADER -->
+    <header>
+        <div class="logo-section">
+            <h1>SOFASCORE REALTIME</h1>
+            <p>Trực tiếp diễn biến bóng đá và truy vấn thông tin API tốc độ cao</p>
+        </div>
+        <div class="connection-badge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Đang kết nối...</span>
+        </div>
+    </header>
+
+    <!-- GRID LAYOUT -->
+    <div class="layout-grid">
+        <!-- BẢNG TỈ SỐ TRỰC TIẾP (WS REALTIME) -->
+        <div class="glass-card">
+            <div class="card-title">
+                Diễn biến Trực tiếp toàn cầu
+                <span class="badge-live">LIVE UPDATES</span>
+            </div>
+            
+            <div class="live-container" id="liveContainer">
+                <div style="text-align: center; color: var(--text-secondary); padding: 4rem 0;">
+                    Chờ kết nối WebSocket để hiển thị diễn biến trực tiếp từ sân cỏ...
+                </div>
+            </div>
+        </div>
+
+        <!-- BỘ TÌM KIẾM CHI TIẾT (REST API) -->
+        <div class="glass-card" style="align-self: start;">
+            <div class="card-title">Truy vấn Dữ liệu Câu lạc bộ</div>
+            
+            <div class="search-bar">
+                <input type="text" class="search-input" id="searchInput" placeholder="Nhập tên câu lạc bộ (ví dụ: Arsenal, Girona...)">
+                <button class="btn-search" id="searchBtn">TÌM KIẾM</button>
+            </div>
+            
+            <div class="results-container" id="resultsContainer">
+                <div style="text-align: center; color: var(--text-secondary); padding: 2rem 0; font-size: 0.9rem;">
+                    Nhập tên đội bóng để tra cứu nhanh thông tin REST API.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DETAILS OVERLAY MODAL -->
+<div class="overlay" id="detailsOverlay">
+    <div class="details-modal">
+        <button class="btn-close" id="closeOverlayBtn">&times;</button>
+        <div class="modal-body" id="modalBody">
+            <!-- Dữ liệu chi tiết nạp động -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- KHAI BÁO CÁC PHẦN TỬ DOM ---
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const liveContainer = document.getElementById('liveContainer');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const detailsOverlay = document.getElementById('detailsOverlay');
+    const closeOverlayBtn = document.getElementById('closeOverlayBtn');
+    const modalBody = document.getElementById('modalBody');
+
+    const API_BASE = "http://127.0.0.1:8000";
+    const WS_BASE = "ws://127.0.0.1:8000/ws/live";
+    
+    let activeMatches = {}; // Lưu trữ danh sách các trận đấu đang phát trực tiếp
+
+    // --- KẾT NỐI WEBSOCKET REALTIME GATEWAY ---
+    function connectWebSocket() {
+        console.log("Đang mở kết nối WebSocket tới:", WS_BASE);
+        const socket = new WebSocket(WS_BASE);
+
+        socket.onopen = () => {
+            statusDot.classList.add('online');
+            statusText.innerText = "WEBSOCKET ONLINE";
+            statusText.style.color = "var(--success-color)";
+            liveContainer.innerHTML = ""; // Clear loader
+        };
+
+        socket.onmessage = (event) => {
+            try {
+                const data = jsonParseSafe(event.data);
+                if (data && data.type === "live_score_update") {
+                    updateMatchUI(data);
+                }
+            } catch (err) {
+                console.error("Lỗi phân tích tin nhắn WebSocket:", err);
+            }
+        };
+
+        socket.onclose = () => {
+            statusDot.classList.remove('online');
+            statusText.innerText = "WEBSOCKET DISCONNECTED";
+            statusText.style.color = "#ff3b30";
+            
+            // Tự động kết nối lại sau 3 giây
+            setTimeout(connectWebSocket, 3000);
+        };
+    }
+
+    function jsonParseSafe(str) {
+        try {
+            return JSON.parse(str);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // --- CẬP NHẬT GIAO DIỆN BẢNG TỶ SỐ REALTIME ---
+    function updateMatchUI(matchData) {
+        const raw = matchData.raw || {};
+        const matchId = matchData.match_id;
+        
+        // Trích xuất tên đội bóng
+        const homeTeamName = raw["homeTeam.name"] || raw["homeTeam"]?.["name"] || "Đội nhà";
+        const awayTeamName = raw["awayTeam.name"] || raw["awayTeam"]?.["name"] || "Đội khách";
+        const tournamentName = raw["tournament.name"] || raw["tournament"]?.["name"] || "Bóng đá";
+        
+        const homeScore = matchData.home_score;
+        const awayScore = matchData.away_score;
+        const status = matchData.status;
+
+        // Nếu trận đấu chưa có trong danh sách hiển thị, tạo mới card
+        let matchEl = document.getElementById(`match-${matchId}`);
+        let isNew = false;
+        let scoreChanged = false;
+
+        if (!matchEl) {
+            isNew = true;
+            matchEl = document.createElement('div');
+            matchEl.id = `match-${matchId}`;
+            matchEl.className = 'match-card';
+            
+            // Xóa dòng hướng dẫn chờ ban đầu nếu đây là trận đầu tiên
+            if (Object.keys(activeMatches).length === 0) {
+                liveContainer.innerHTML = "";
+            }
+            activeMatches[matchId] = { homeScore, awayScore };
+        } else {
+            // Kiểm tra xem tỷ số có thay đổi để kích hoạt nhấp nháy phát sáng không
+            const old = activeMatches[matchId] || {};
+            if (old.homeScore !== homeScore || old.awayScore !== awayScore) {
+                scoreChanged = true;
+                activeMatches[matchId] = { homeScore, awayScore };
+            }
+        }
+
+        // Tạo nội dung HTML của Card
+        const isLive = status.toLowerCase().includes("started") || status.toLowerCase().includes("time") || status.toLowerCase().includes("min");
+        
+        matchEl.innerHTML = `
+            <div class="match-card-meta">${tournamentName} (ID: ${matchId})</div>
+            <div class="match-card-main">
+                <span class="team-display home">${homeTeamName}</span>
+                <span class="score-display ${isLive ? 'live-active' : ''}">${homeScore === null || homeScore === undefined ? '-' : homeScore} : ${awayScore === null || awayScore === undefined ? '-' : awayScore}</span>
+                <span class="team-display away">${awayTeamName}</span>
+            </div>
+            <span class="match-status-tag ${isLive ? 'active' : ''}">${status}</span>
+        `;
+
+        if (isNew) {
+            liveContainer.insertBefore(matchEl, liveContainer.firstChild);
+        }
+
+        // Kích hoạt Micro-animation nếu có cập nhật tỉ số
+        if (scoreChanged) {
+            matchEl.classList.remove('flash-update');
+            void matchEl.offsetWidth; // Trigger reflow để kích hoạt lại animation
+            matchEl.classList.add('flash-update');
+        }
+    }
+
+    // --- XỬ LÝ TRA CỨU REST API CỦA CÂU LẠC BỘ ---
+    async function defSearch() {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        resultsContainer.innerHTML = `<div style="text-align: center; padding: 2rem 0; color: var(--text-secondary)">Đang truy vấn dữ liệu cũ qua REST API...</div>`;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            const results = data.results || [];
+            
+            if (results.length === 0) {
+                resultsContainer.innerHTML = `<div style="text-align: center; padding: 2rem 0; color: var(--text-secondary)">Không tìm thấy kết quả phù hợp.</div>`;
+                return;
+            }
+
+            resultsContainer.innerHTML = "";
+            results.forEach(item => {
+                // Chỉ lấy các thực thể là đội bóng (team)
+                if (item.type === "team") {
+                    const entity = item.entity;
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'result-item';
+                    itemEl.onclick = () => showTeamDetails(entity.id);
+                    
+                    itemEl.innerHTML = `
+                        <div class="result-info">
+                            <h4>${entity.name}</h4>
+                            <p>Quốc gia: ${entity.country?.name || 'Không xác định'}</p>
+                        </div>
+                        <span class="category-tag">${entity.sport?.name || 'Bóng đá'}</span>
+                    `;
+                    resultsContainer.appendChild(itemEl);
+                }
+            });
+
+            if (resultsContainer.children.length === 0) {
+                resultsContainer.innerHTML = `<div style="text-align: center; padding: 2rem 0; color: var(--text-secondary)">Không tìm thấy đội bóng nào.</div>`;
+            }
+        } catch (err) {
+            console.error("Lỗi khi tìm kiếm câu lạc bộ:", err);
+            resultsContainer.innerHTML = `<div style="text-align: center; padding: 2rem 0; color: #ff3b30">Lỗi khi truy vấn máy chủ REST API.</div>`;
+        }
+    }
+
+    // --- HIỂN THỊ THÔNG TIN CHI TIẾT CÂU LẠC BỘ (MODAL) ---
+    async function showTeamDetails(teamId) {
+        detailsOverlay.classList.add('active');
+        modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Đang tải chi tiết REST API...</div>`;
+
+        try {
+            // Lấy thông tin đội bóng, chuyển nhượng và đội hình song song
+            const [teamRes, transRes, squadRes] = await Promise.all([
+                fetch(`${API_BASE}/api/team/${teamId}`),
+                fetch(`${API_BASE}/api/team/${teamId}/transfers`),
+                fetch(`${API_BASE}/api/team/${teamId}/players`)
+            ]);
+            
+            const teamData = await teamRes.json();
+            const transData = await transRes.json();
+            const squadData = await squadRes.json();
+            
+            const team = teamData.team || {};
+            const managerName = team.manager?.name || "Không rõ";
+            const venueName = team.venue?.name || "Không rõ";
+            const capacity = team.venue?.capacity ? team.venue.capacity.toLocaleString() : "Không rõ";
+
+            const transInCount = transData.transfers_in ? transData.transfers_in.length : 0;
+            const transOutCount = transData.transfers_out ? transData.transfers_out.length : 0;
+
+            const players = squadData.players || [];
+            
+            // Nhóm cầu thủ theo vị trí thi đấu
+            const positionNames = {
+                "G": "Thủ môn (Goalkeepers)",
+                "D": "Hậu vệ (Defenders)",
+                "M": "Tiền vệ (Midfielders)",
+                "F": "Tiền đạo (Forwards)"
+            };
+            
+            const groupedPlayers = {
+                "G": [],
+                "D": [],
+                "M": [],
+                "F": []
+            };
+            
+            players.forEach(p => {
+                const playerObj = p.player || {};
+                const pos = playerObj.position || "M";
+                if (groupedPlayers[pos]) {
+                    groupedPlayers[pos].push(playerObj);
+                } else {
+                    groupedPlayers["M"].push(playerObj);
+                }
+            });
+
+            // Sắp xếp các cầu thủ trong từng nhóm theo số áo tăng dần
+            Object.keys(groupedPlayers).forEach(pos => {
+                groupedPlayers[pos].sort((a, b) => {
+                    const numA = parseInt(a.jerseyNumber || a.shirtNumber || 999);
+                    const numB = parseInt(b.jerseyNumber || b.shirtNumber || 999);
+                    return numA - numB;
+                });
+            });
+
+            modalBody.innerHTML = `
+                <h3>${team.fullName || team.name}</h3>
+                <p class="subtitle">Mã Code: ${team.nameCode || 'N/A'} | Sport: ${team.sport?.name || 'Football'}</p>
+                
+                <div class="details-grid">
+                    <div class="detail-card">
+                        <label>Huấn luyện viên</label>
+                        <p>${managerName}</p>
+                    </div>
+                    <div class="detail-card">
+                        <label>Sân vận động</label>
+                        <p>${venueName}</p>
+                    </div>
+                    <div class="detail-card">
+                        <label>Sức chứa</label>
+                        <p>${capacity} chỗ</p>
+                    </div>
+                    <div class="detail-card">
+                        <label>Số lượng Fan</label>
+                        <p>${team.userCount ? team.userCount.toLocaleString() : '0'}</p>
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Giao dịch Chuyển nhượng Mùa giải</h4>
+                <div class="details-grid">
+                    <div class="detail-card" style="border-color: rgba(57, 255, 20, 0.2)">
+                        <label style="color: var(--success-color)">Hợp đồng chuyển nhượng ĐẾN</label>
+                        <p>${transInCount} Cầu thủ</p>
+                    </div>
+                    <div class="detail-card" style="border-color: rgba(255, 59, 48, 0.2)">
+                        <label style="color: #ff3b30">Hợp đồng chuyển nhượng ĐI</label>
+                        <p>${transOutCount} Cầu thủ</p>
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 2rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Đội hình thi đấu (Squad)</h4>
+                <div class="squad-sections">
+                    ${Object.entries(groupedPlayers).map(([posCode, list]) => {
+                        if (list.length === 0) return '';
+                        return `
+                            <div style="margin-bottom: 1.5rem;">
+                                <h5 style="color: var(--accent-glow); margin-bottom: 0.6rem; font-weight: 600; font-size: 1rem;">${positionNames[posCode]}</h5>
+                                <div class="player-grid">
+                                    ${list.map(p => {
+                                        const jersey = p.jerseyNumber || p.shirtNumber ? `#${p.jerseyNumber || p.shirtNumber}` : '#-';
+                                        const name = p.name || p.shortName || 'Cầu thủ';
+                                        const value = p.proposedMarketValue ? `€${(p.proposedMarketValue / 1000000).toFixed(1)}M` : 'N/A';
+                                        return `
+                                            <div class="player-card" onclick="showPlayerProfile(${p.id}, ${teamId})">
+                                                <div class="player-number">${jersey}</div>
+                                                <div class="player-name">${name}</div>
+                                                <div class="player-val">${value}</div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        } catch (err) {
+            console.error("Lỗi tải chi tiết câu lạc bộ:", err);
+            modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: #ff3b30">Lỗi khi kết nối REST API để lấy chi tiết câu lạc bộ.</div>`;
+        }
+    }
+
+    // --- HIỂN THỊ THÔNG TIN CHI TIẾT CẦU THỦ (MODAL PROFILE) ---
+    async function showPlayerProfile(playerId, teamId) {
+        modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Đang nạp hồ sơ cầu thủ từ REST API...</div>`;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/player/${playerId}`);
+            const data = await res.json();
+            
+            const player = data.player || {};
+            const attrs = data.attributes || {};
+            const overview = (attrs.playerAttributeOverviews && attrs.playerAttributeOverviews[0]) || {};
+
+            modalBody.innerHTML = `
+                <button class="btn-search" style="margin-bottom: 1.5rem; padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="showTeamDetails(${teamId})">&larr; QUAY LẠI ĐỘI BÓNG</button>
+                
+                <div class="profile-container">
+                    <div class="profile-header">
+                        <div>
+                            <h3 style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, var(--accent-glow), var(--primary-glow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                                ${player.fullName || player.name}
+                            </h3>
+                            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.3rem; font-weight: 500;">
+                                Số áo: ${player.shirtNumber || player.jerseyNumber || 'N/A'} | Vị trí: ${positionNameFull(player.position)}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="details-grid">
+                        <div class="detail-card">
+                            <label>Chiều cao</label>
+                            <p>${player.height ? player.height + ' cm' : 'Không rõ'}</p>
+                        </div>
+                        <div class="detail-card">
+                            <label>Chân thuận</label>
+                            <p>${preferredFootVi(player.preferredFoot)}</p>
+                        </div>
+                        <div class="detail-card">
+                            <label>Giá trị thị trường</label>
+                            <p>${player.proposedMarketValue ? '€' + (player.proposedMarketValue / 1000000).toFixed(1) + 'M' : 'N/A'}</p>
+                        </div>
+                        <div class="detail-card">
+                            <label>Quốc tịch</label>
+                            <p>${player.country?.name || 'Không rõ'}</p>
+                        </div>
+                    </div>
+
+                    <h4 style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Chỉ số Kỹ thuật & Tư duy chiến thuật</h4>
+                    <div class="radar-stats">
+                        ${[
+                            { label: "Tấn công (Attacking)", val: overview.attacking || 50 },
+                            { label: "Kỹ thuật (Technical)", val: overview.technical || 50 },
+                            { label: "Chiến thuật (Tactical)", val: overview.tactical || 50 },
+                            { label: "Phòng ngự (Defending)", val: overview.defending || 50 },
+                            { label: "Sáng tạo (Creativity)", val: overview.creativity || 50 }
+                        ].map(item => `
+                            <div class="radar-bar-container">
+                                <span class="radar-label" style="font-size: 0.85rem; font-weight: 600; width: 140px;">${item.label}</span>
+                                <div class="radar-track">
+                                    <div class="radar-fill" id="bar-${item.label.replace(/[^a-zA-Z]/g, '')}" style="width: 0%"></div>
+                                </div>
+                                <span class="radar-val-num" style="font-size: 0.85rem; font-weight: 700; width: 30px; text-align: right; color: var(--accent-glow);">${item.val}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            // Kích hoạt hiệu ứng chuyển động tăng dần (Micro-animation) cho các thanh chỉ số
+            setTimeout(() => {
+                const stats = [
+                    { label: "Tấn công (Attacking)", val: overview.attacking || 50 },
+                    { label: "Kỹ thuật (Technical)", val: overview.technical || 50 },
+                    { label: "Chiến thuật (Tactical)", val: overview.tactical || 50 },
+                    { label: "Phòng ngự (Defending)", val: overview.defending || 50 },
+                    { label: "Sáng tạo (Creativity)", val: overview.creativity || 50 }
+                ];
+                stats.forEach(item => {
+                    const el = document.getElementById(`bar-${item.label.replace(/[^a-zA-Z]/g, '')}`);
+                    if (el) el.style.width = `${item.val}%`;
+                });
+            }, 100);
+
+        } catch (err) {
+            console.error("Lỗi tải chi tiết cầu thủ:", err);
+            modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: #ff3b30">Lỗi khi tải thông tin cầu thủ từ REST API.</div>`;
+        }
+    }
+
+    function positionNameFull(pos) {
+        const mapping = {
+            "G": "Thủ môn (Goalkeeper)",
+            "D": "Hậu vệ (Defender)",
+            "M": "Tiền vệ (Midfielder)",
+            "F": "Tiền đạo (Forward)"
+        };
+        return mapping[pos] || pos || "Không rõ";
+    }
+
+    function preferredFootVi(foot) {
+        const mapping = {
+            "Left": "Chân trái",
+            "Right": "Chân phải",
+            "Both": "Hai chân như một"
+        };
+        return mapping[foot] || foot || "Không rõ";
+    }
+
+    // --- SỰ KIỆN NÚT ---
+    searchBtn.onclick = defSearch;
+    searchInput.onkeypress = (e) => { if (e.key === 'Enter') defSearch(); };
+    closeOverlayBtn.onclick = () => detailsOverlay.classList.remove('active');
+    
+    // Đóng modal khi click ra ngoài vùng xám
+    detailsOverlay.onclick = (e) => {
+        if (e.target === detailsOverlay) {
+            detailsOverlay.classList.remove('active');
+        }
+    };
+
+    // --- KHỞI CHẠY ---
+    connectWebSocket();
+
+</script>
+</body>
+</html>

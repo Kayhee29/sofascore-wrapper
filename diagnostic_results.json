@@ -1,0 +1,108 @@
+{
+    "working": [
+        {
+            "name": "Search.search_all",
+            "preview": "{'results': [{'entity': {'id': 42, 'name': 'Arsenal', 'nameCode': 'ARS', 'slug': 'arsenal', 'national': False, 'sport': {'id': 1, 'slug': 'football', 'name': 'Football'}, 'userCount': 3628706, 'teamCo..."
+        },
+        {
+            "name": "Search.search_match",
+            "preview": "{'results': [{'entity': {'id': 15632636, 'name': 'Paris Saint-Germain - Arsenal', 'tournament': {'id': 23, 'name': 'UEFA Champions League, Knockout stage', 'slug': 'uefa-champions-league-knockout-stag..."
+        },
+        {
+            "name": "Search.search_players",
+            "preview": "{'results': [{'entity': {'id': 804508, 'name': 'Viktor Gy\u00f6keres', 'slug': 'viktor-gyokeres', 'userCount': 221062, 'team': {'id': 42, 'name': 'Arsenal', 'nameCode': 'ARS', 'slug': 'arsenal', 'national'..."
+        },
+        {
+            "name": "Search.search_teams",
+            "preview": "{'results': [{'entity': {'id': 42, 'name': 'Arsenal', 'nameCode': 'ARS', 'slug': 'arsenal', 'national': False, 'sport': {'id': 1, 'slug': 'football', 'name': 'Football'}, 'userCount': 3628706, 'teamCo..."
+        },
+        {
+            "name": "Search.search_leagues",
+            "preview": "{'results': []}..."
+        },
+        {
+            "name": "League.get_seasons",
+            "preview": "[{'name': 'Premier League 25/26', 'year': '25/26', 'editor': False, 'id': 76986}, {'name': 'Premier League 24/25', 'year': '24/25', 'editor': False, 'id': 61627}, {'name': 'Premier League 23/24', 'yea..."
+        },
+        {
+            "name": "League.current_season",
+            "preview": "{'name': 'Premier League 25/26', 'year': '25/26', 'editor': False, 'id': 76986}..."
+        },
+        {
+            "name": "League.current_round",
+            "preview": "38..."
+        },
+        {
+            "name": "League.standings",
+            "preview": "{'standings': [{'id': 178737, 'type': 'total', 'tournament': {'name': 'Premier League', 'slug': 'premier-league', 'category': {'name': 'England', 'slug': 'england', 'sport': {'name': 'Football', 'slug..."
+        },
+        {
+            "name": "League.top_players",
+            "preview": "{'topPlayers': {'rating': [{'statistics': {'rating': 7.6057142857143, 'id': 2145655, 'type': 'overall', 'appearances': 35, 'statisticsType': {'sportSlug': 'football', 'statisticsType': 'player'}}, 'pl..."
+        },
+        {
+            "name": "League.top_teams",
+            "preview": "{'topTeams': {'avgRating': [{'team': {'name': 'Manchester City', 'slug': 'manchester-city', 'gender': 'M', 'sport': {'name': 'Football', 'slug': 'football', 'id': 1}, 'userCount': 4256564, 'national':..."
+        },
+        {
+            "name": "League.next_fixtures",
+            "preview": "None"
+        },
+        {
+            "name": "League.last_fixtures",
+            "preview": "[{'eventState': {}, 'tournament': {'name': 'Premier League', 'slug': 'premier-league', 'category': {'name': 'England', 'slug': 'england', 'sport': {'name': 'Football', 'slug': 'football', 'id': 1}, 'p..."
+        },
+        {
+            "name": "Team.get_team",
+            "preview": "{'team': {'name': 'Arsenal', 'slug': 'arsenal', 'shortName': 'Arsenal', 'gender': 'M', 'sport': {'name': 'Football', 'slug': 'football', 'id': 1}, 'category': {'name': 'England', 'slug': 'england', 's..."
+        },
+        {
+            "name": "Team.transfers_in",
+            "preview": "[{'player': {'name': 'F\u00e1bio Vieira', 'firstName': 'Fabio', 'lastName': 'Vieira', 'slug': 'fabio-vieira', 'shortName': 'F. Vieira', 'position': 'M', 'jerseyNumber': '20', 'userCount': 6835, 'gender': '..."
+        },
+        {
+            "name": "Team.transfers_out",
+            "preview": "[{'player': {'name': 'Jorginho', 'firstName': 'Jorge Luiz', 'lastName': 'Jorginho', 'slug': 'jorginho', 'shortName': 'Jorginho', 'position': 'M', 'jerseyNumber': '21', 'userCount': 33690, 'gender': 'M..."
+        },
+        {
+            "name": "Team.next_fixtures",
+            "preview": "[{'eventState': {}, 'tournament': {'name': 'UEFA Champions League, Knockout stage', 'slug': 'uefa-champions-league-knockout-stage', 'category': {'name': 'Europe', 'slug': 'europe', 'sport': {'name': '..."
+        },
+        {
+            "name": "Match.live_games",
+            "preview": "{'events': [{'eventState': {}, 'tournament': {'name': 'Torneo Corpo Goretti', 'slug': 'torneo-corpo-goretti', 'category': {'name': 'Colombia Amateur', 'slug': 'colombia-amateur', 'sport': {'name': 'Fo..."
+        },
+        {
+            "name": "Match.games_by_date",
+            "preview": "{'events': [{'tournament': {'name': 'UEFA Conference League, Knockout stage', 'slug': 'uefa-europa-conference-league-knockout-stage', 'category': {'name': 'Europe', 'slug': 'europe', 'sport': {'name':..."
+        },
+        {
+            "name": "Match.stats",
+            "preview": "{'statistics': [{'period': 'ALL', 'groups': [{'groupName': 'Match overview', 'statisticsItems': [{'name': 'Ball possession', 'home': '39%', 'away': '61%', 'compareCode': 2, 'statisticsType': 'positive..."
+        },
+        {
+            "name": "Match.commentary",
+            "preview": "{'comments': [{'text': 'Match ends, Girona 1, Arsenal 2.', 'type': 'matchEnded', 'sequence': 0, 'id': 27698855, 'time': 0, 'notableActions': []}, {'text': 'Second Half ends, Girona 1, Arsenal 2.', 'ty..."
+        },
+        {
+            "name": "Match.lineups_away",
+            "preview": "{'confirmed': True, 'formation': '4-3-3', 'player_colour': {'primary': '000000', 'number': 'ffffff', 'outline': '000000', 'fancyNumber': 'ffffff'}, 'goalkeeper_colour': {'primary': 'b9dd27', 'number':..."
+        },
+        {
+            "name": "Match.lineups_home",
+            "preview": "{'confirmed': True, 'formation': '4-2-3-1', 'player_colour': {'primary': 'ea4a3e', 'number': 'ffffff', 'outline': 'ea4a3e', 'fancyNumber': '222226'}, 'goalkeeper_colour': {'primary': '8cd1ff', 'number..."
+        }
+    ],
+    "failed": [
+        {
+            "name": "League.get_league",
+            "error": "TypeError: League.get_league() missing 1 required positional argument: 'league_id'",
+            "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Kayhee29\\sofascore-wrapper\\diagnostic.py\", line 20, in test_endpoint\n    res = await func(*args, **kwargs)\n                ^^^^^^^^^^^^^^^^^^^^^\nTypeError: League.get_league() missing 1 required positional argument: 'league_id'\n"
+        },
+        {
+            "name": "Match.match_channels",
+            "error": "Exception: Failed to fetch /tv/event/12764241/country-channels: 404",
+            "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Kayhee29\\sofascore-wrapper\\diagnostic.py\", line 20, in test_endpoint\n    res = await func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Kayhee29\\sofascore-wrapper\\sofascore_wrapper\\match.py\", line 1164, in match_channels\n    return await self.api._get(f\"/tv/event/{self.match_id}/country-channels\")\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Kayhee29\\sofascore-wrapper\\sofascore_wrapper\\api.py\", line 24, in _get\n    raise Exception(f\"Failed to fetch {endpoint}: {response.status}\")\nException: Failed to fetch /tv/event/12764241/country-channels: 404\n"
+        }
+    ]
+}

@@ -2047,17 +2047,8 @@ class League:
             Dict[str, int]: A dictionary containing two keys:
 
         """
-        return await self.api._get(f"/unique-tournaments/{league_id}/season/{season_id}/info")
-    
-    async def get_league(self, league_id: int) -> Dict[str, int]:
-        """
-        Retrieves the tournament.
+        return await self.api._get(f"/unique-tournament/{league_id}/season/{season_id}/info")
 
-        Returns:
-            Dict[str, int]: A dictionary containing two keys:
-
-        """
-        return await self.api._get(f"/unique-tournaments/{league_id}")
     
 
 
