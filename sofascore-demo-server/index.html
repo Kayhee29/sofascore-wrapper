@@ -579,9 +579,18 @@
             <h1>SOFASCORE REALTIME</h1>
             <p>Trực tiếp diễn biến bóng đá và truy vấn thông tin API tốc độ cao</p>
         </div>
-        <div class="connection-badge">
-            <span class="status-dot" id="statusDot"></span>
-            <span id="statusText">Đang kết nối...</span>
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <a href="/teams" id="teamsListBtn" style="text-decoration: none; background: rgba(0, 240, 255, 0.15); border: 1px solid var(--accent-glow); color: var(--accent-glow); padding: 0.6rem 1.2rem; border-radius: 12px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);" onmouseover="this.style.boxShadow='0 0 15px rgba(0, 240, 255, 0.3)', this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 0 10px rgba(0, 240, 255, 0.1)', this.style.transform='none'">
+                DANH SÁCH ĐỘI NGOẠI HẠNG ANH
+            </a>
+            <select id="seasonSelect" style="background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.6rem 1.2rem; border-radius: 12px; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; outline: none; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onchange="changeSeason(this.value)">
+                <option value="2025/26" selected>Mùa giải 2025/26</option>
+                <option value="2024/25">Mùa giải 2024/25</option>
+            </select>
+            <div class="connection-badge">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Đang kết nối...</span>
+            </div>
         </div>
     </header>
 
@@ -645,6 +654,29 @@
     const WS_BASE = "ws://127.0.0.1:8000/ws/live";
     const DETAIL_CACHE_TTL_MS = 10 * 60 * 1000;
     const apiResponseCache = new Map();
+    let currentSeason = "2025/26";
+    window.currentOpenTeamId = null;
+
+    // Đổi mùa giải
+    window.changeSeason = function(newSeason) {
+        currentSeason = newSeason;
+        
+        // Cập nhật tham số URL mà không cần tải lại trang
+        const url = new URL(window.location);
+        url.searchParams.set('season', newSeason);
+        window.history.pushState({}, '', url);
+        
+        // Đồng bộ nút DANH SÁCH ĐỘI
+        const teamsListBtn = document.getElementById("teamsListBtn");
+        if (teamsListBtn) {
+            teamsListBtn.href = `/teams?season=${encodeURIComponent(newSeason)}`;
+        }
+        
+        // Nếu đang mở modal một đội bóng cụ thể, tự động tải lại đội hình cho mùa giải mới
+        if (window.currentOpenTeamId) {
+            showTeamDetails(window.currentOpenTeamId, newSeason);
+        }
+    };
 
     async function getCachedJson(cacheKey, url, ttlMs = DETAIL_CACHE_TTL_MS) {
         const now = Date.now();
@@ -844,7 +876,7 @@
                     setCachedData(`team:${entity.id}`, { team: entity });
                     const itemEl = document.createElement('div');
                     itemEl.className = 'result-item';
-                    itemEl.onclick = () => showTeamDetails(entity.id);
+                    itemEl.onclick = () => showTeamDetails(entity.id, currentSeason);
                     
                     itemEl.innerHTML = `
                         <div class="result-info">
@@ -865,7 +897,7 @@
 
                     const itemEl = document.createElement('div');
                     itemEl.className = 'result-item';
-                    itemEl.onclick = () => showPlayerProfile(entity.id, teamId);
+                    itemEl.onclick = () => showPlayerProfile(entity.id, teamId, currentSeason);
 
                     itemEl.innerHTML = `
                         <div class="result-info">
@@ -888,16 +920,31 @@
     }
 
     // --- HIỂN THỊ THÔNG TIN CHI TIẾT CÂU LẠC BỘ (MODAL) ---
-    async function showTeamDetails(teamId) {
+    async function showTeamDetails(teamId, season = null) {
+        window.currentOpenTeamId = teamId; // Track để reload khi đổi mùa giải!
         detailsOverlay.classList.add('active');
         modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Đang tải chi tiết REST API...</div>`;
+
+        // Lấy season từ dropdown/biến/URL nếu không truyền trực tiếp
+        if (!season) {
+            const selectEl = document.getElementById("seasonSelect");
+            if (selectEl) {
+                season = selectEl.value;
+            } else {
+                const urlParams = new URLSearchParams(window.location.search);
+                season = urlParams.get('season') || currentSeason;
+            }
+        }
+        
+        const seasonQuery = season ? `?season=${encodeURIComponent(season)}` : '';
+        const squadCacheKey = `team:${teamId}:players${season ? ':' + season : ''}`;
 
         try {
             // Lấy thông tin đội bóng, chuyển nhượng và đội hình song song
             const [teamResult, transResult, squadResult] = await Promise.allSettled([
                 getCachedJson(`team:${teamId}`, `${API_BASE}/api/team/${teamId}`),
                 getCachedJson(`team:${teamId}:transfers`, `${API_BASE}/api/team/${teamId}/transfers`),
-                getCachedJson(`team:${teamId}:players`, `${API_BASE}/api/team/${teamId}/players`)
+                getCachedJson(squadCacheKey, `${API_BASE}/api/team/${teamId}/players${seasonQuery}`)
             ]);
 
             if (teamResult.status === "rejected") {
@@ -969,10 +1016,18 @@
                 });
             });
 
-            const logoUrl = team.logo_url_local || `https://img.sofascore.com/api/v1/team/${teamId}/image`;
+            // Logo priority: apifootball_logo_url → media.api-sports.io/{apifootball_id} → SVG badge → local PB file
+            const _primary   = team.apifootball_logo_url
+                             || (team.apifootball_id ? `https://media.api-sports.io/football/teams/${team.apifootball_id}.png` : null);
+            const _colors    = team.teamColors || {};
+            const _primary_c = _colors.primary   || "#9e43ff";
+            const _second_c  = _colors.secondary || "#ffffff";
+            const _code      = team.nameCode || (team.name || "???").substring(0, 3).toUpperCase();
+            const _fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'><rect width='60' height='60' rx='14' fill='${_primary_c}'/><text x='50%' y='56%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='800' fill='${_second_c}' font-family='Arial,sans-serif'>${_code}</text></svg>`;
+            const logoUrl = _primary || team.logo_url_local || _fallbackSvg;
             modalBody.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 0.5rem;">
-                    <img src="${logoUrl}" alt="${team.name}" style="width: 60px; height: 60px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 12px; border: 1px solid var(--border-color);" onerror="this.src='https://www.sofascore.com/static/images/placeholders/team.png'">
+                    <img src="${logoUrl}" alt="${team.name}" style="width: 60px; height: 60px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 12px; border: 1px solid var(--border-color);" onerror="this.onerror=null;this.src='${_fallbackSvg}'">
                     <div>
                         <h3 style="font-size: 2rem; font-weight: 800; background: linear-gradient(to right, #00f0ff, #9e43ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${team.fullName || team.name}</h3>
                         <p class="subtitle" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">Mã Code: ${team.nameCode || 'N/A'} | Sport: ${team.sport?.name || 'Football'}</p>
@@ -1023,10 +1078,25 @@
                                         const jersey = p.jerseyNumber || p.shirtNumber ? `#${p.jerseyNumber || p.shirtNumber}` : '#-';
                                         const name = p.name || p.shortName || 'Cầu thủ';
                                         const value = p.proposedMarketValue ? `€${(p.proposedMarketValue / 1000000).toFixed(1)}M` : 'N/A';
+                                        
+                                        // Trich xuat goals & assists tu stats neu co
+                                        let statsBadge = "";
+                                        if (p.stats && p.stats.length > 0) {
+                                            const stdStats = p.stats.find(s => s.stat_type === "standard" || s.source === "understat");
+                                            if (stdStats) {
+                                                const goals = stdStats.goals ?? 0;
+                                                const assists = stdStats.assists ?? 0;
+                                                if (goals > 0 || assists > 0) {
+                                                    statsBadge = `<div class="player-stats-badge" style="position: absolute; right: 8px; top: 8px; background: rgba(0, 240, 255, 0.15); border: 1px solid var(--accent-glow); color: var(--accent-glow); padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.65rem; font-weight: 700; z-index: 2;">⚽ ${goals} | 🅰️ ${assists}</div>`;
+                                                }
+                                            }
+                                        }
+
                                         return `
-                                            <div class="player-card" onclick="showPlayerProfile(${p.id}, ${teamId})">
+                                            <div class="player-card" onclick="showPlayerProfile('${p.id}', '${teamId}', '${season || ''}')">
+                                                ${statsBadge}
                                                 <div class="player-number">${jersey}</div>
-                                                <div class="player-name">${name}</div>
+                                                <div class="player-name" style="padding-right: 45px;">${name}</div>
                                                 <div class="player-val">${value}</div>
                                             </div>
                                         `;
@@ -1044,16 +1114,75 @@
     }
 
     // --- HIỂN THỊ THÔNG TIN CHI TIẾT CẦU THỦ (MODAL PROFILE) ---
-    function renderPlayerProfile(playerId, teamId, data, isRefreshing = false) {
+    function renderPlayerProfile(playerId, teamId, data, statsData = { stats: [] }, isRefreshing = false, season = null) {
         const player = data.player || {};
         const attrs = data.attributes || {};
         const overview = (attrs.playerAttributeOverviews && attrs.playerAttributeOverviews[0]) || {};
         const loadingText = isRefreshing
-            ? `<p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">Dang bo sung du lieu chi tiet...</p>`
+            ? `<p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">Đang bổ sung dữ liệu chi tiết...</p>`
             : "";
         const backButton = teamId
-            ? `<button class="btn-search" style="margin-bottom: 1.5rem; padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="showTeamDetails(${teamId})">&larr; QUAY LẠI ĐỘI BÓNG</button>`
+            ? `<button class="btn-search" style="margin-bottom: 1.5rem; padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="showTeamDetails('${teamId}', '${season || ''}')">&larr; QUAY LẠI ĐỘI BÓNG</button>`
             : "";
+
+        const stats = statsData.stats || [];
+        let statsHtml = "";
+        if (stats.length > 0) {
+            statsHtml = `
+                <h4 style="margin-top: 2rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Thống kê chi tiết mùa giải (Dữ liệu offline)</h4>
+                <div class="stats-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    ${stats.map((s, idx) => `
+                        <button class="tab-btn ${idx === 0 ? 'active' : ''}" onclick="switchStatsTab(${idx})" style="background: ${idx === 0 ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255,255,255,0.05)'}; color: var(--text-primary); border: 1px solid ${idx === 0 ? 'var(--accent-glow)' : 'var(--border-color)'}; padding: 0.4rem 0.8rem; border-radius: 8px; font-size: 0.8rem; cursor: pointer; font-weight: 600; outline: none; transition: all 0.3s ease;">
+                            ${s.source.toUpperCase()} (${s.season}) - ${s.stat_type}
+                        </button>
+                    `).join('')}
+                </div>
+                <div class="stats-tabs-content" style="margin-bottom: 1.5rem;">
+                    ${stats.map((s, idx) => {
+                        const tacklesStr = s.tackles ? `${s.tackles_won || 0}/${s.tackles}` : 'N/A';
+                        const passPctStr = s.pass_pct ? `${s.pass_pct}%` : 'N/A';
+                        return `
+                            <div class="stats-tab-pane" id="stats-pane-${idx}" style="display: ${idx === 0 ? 'block' : 'none'};">
+                                <div class="details-grid">
+                                    <div class="detail-card">
+                                        <label>Số trận (Đá chính)</label>
+                                        <p>${s.games ?? 'N/A'} (${s.games_starts ?? 'N/A'})</p>
+                                    </div>
+                                    <div class="detail-card">
+                                        <label>Số phút thi đấu</label>
+                                        <p>${s.minutes ?? 'N/A'} phút</p>
+                                    </div>
+                                    <div class="detail-card">
+                                        <label>Bàn thắng (xG)</label>
+                                        <p>${s.goals ?? 0} (${s.xg ? s.xg.toFixed(2) : '0.00'})</p>
+                                    </div>
+                                    <div class="detail-card">
+                                        <label>Kiến tạo (xA)</label>
+                                        <p>${s.assists ?? 0} (${s.xg_assist ? s.xg_assist.toFixed(2) : '0.00'})</p>
+                                    </div>
+                                    <div class="detail-card">
+                                        <label>Đường chuyền mở cơ hội</label>
+                                        <p>${s.key_passes ?? 'N/A'}</p>
+                                    </div>
+                                    <div class="detail-card">
+                                        <label>Chuyền bóng chính xác</label>
+                                        <p>${passPctStr}</p>
+                                    </div>
+                                    <div class="detail-card">
+                                        <label>Tắc bóng thành công</label>
+                                        <p>${tacklesStr}</p>
+                                    </div>
+                                    <div class="detail-card">
+                                        <label>Cắt bóng (Interceptions)</label>
+                                        <p>${s.interceptions ?? 'N/A'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
 
         modalBody.innerHTML = `
             ${backButton}
@@ -1063,10 +1192,10 @@
                     <img src="${player.avatar_url_local || `https://img.sofascore.com/api/v1/player/${playerId}/image`}" alt="${player.name || 'Player'}" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.05); border: 2px solid var(--primary-glow); padding: 2px;" onerror="this.src='https://www.sofascore.com/static/images/placeholders/player.png'">
                     <div>
                         <h3 style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, var(--accent-glow), var(--primary-glow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-                            ${player.fullName || player.name || 'Cáº§u thá»§'}
+                            ${player.fullName || player.name || 'Cầu thủ'}
                         </h3>
                         <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.3rem; font-weight: 500;">
-                            Sá»‘ Ã¡o: ${player.shirtNumber || player.jerseyNumber || 'N/A'} | Vá»‹ trÃ­: ${positionNameFull(player.position)}
+                            Số áo: ${player.shirtNumber || player.jerseyNumber || 'N/A'} | Vị trí: ${positionNameFull(player.position)}
                         </p>
                         ${loadingText}
                     </div>
@@ -1074,31 +1203,33 @@
 
                 <div class="details-grid">
                     <div class="detail-card">
-                        <label>Chiá»u cao</label>
-                        <p>${player.height ? player.height + ' cm' : 'KhÃ´ng rÃµ'}</p>
+                        <label>Chiều cao</label>
+                        <p>${player.height ? player.height + ' cm' : 'Không rõ'}</p>
                     </div>
                     <div class="detail-card">
-                        <label>ChÃ¢n thuáº­n</label>
+                        <label>Chân thuận</label>
                         <p>${preferredFootVi(player.preferredFoot)}</p>
                     </div>
                     <div class="detail-card">
-                        <label>GiÃ¡ trá»‹ thá»‹ trÆ°á»ng</label>
-                        <p>${player.proposedMarketValue ? 'â‚¬' + (player.proposedMarketValue / 1000000).toFixed(1) + 'M' : 'N/A'}</p>
+                        <label>Giá trị thị trường</label>
+                        <p>${player.proposedMarketValue ? '€' + (player.proposedMarketValue / 1000000).toFixed(1) + 'M' : 'N/A'}</p>
                     </div>
                     <div class="detail-card">
-                        <label>Quá»‘c tá»‹ch</label>
-                        <p>${player.country?.name || 'KhÃ´ng rÃµ'}</p>
+                        <label>Quốc tịch</label>
+                        <p>${player.country?.name || 'Không rõ'}</p>
                     </div>
                 </div>
 
-                <h4 style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Chá»‰ sá»‘ Ká»¹ thuáº­t & TÆ° duy chiáº¿n thuáº­t</h4>
+                ${statsHtml}
+
+                <h4 style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Chỉ số Kỹ thuật & Tư duy chiến thuật</h4>
                 <div class="radar-stats">
                     ${[
-                        { label: "Táº¥n cÃ´ng (Attacking)", val: overview.attacking || 50 },
-                        { label: "Ká»¹ thuáº­t (Technical)", val: overview.technical || 50 },
-                        { label: "Chiáº¿n thuáº­t (Tactical)", val: overview.tactical || 50 },
-                        { label: "PhÃ²ng ngá»± (Defending)", val: overview.defending || 50 },
-                        { label: "SÃ¡ng táº¡o (Creativity)", val: overview.creativity || 50 }
+                        { label: "Tấn công (Attacking)", val: overview.attacking || 50 },
+                        { label: "Kỹ thuật (Technical)", val: overview.technical || 50 },
+                        { label: "Chiến thuật (Tactical)", val: overview.tactical || 50 },
+                        { label: "Phòng ngự (Defending)", val: overview.defending || 50 },
+                        { label: "Sáng tạo (Creativity)", val: overview.creativity || 50 }
                     ].map(item => `
                         <div class="radar-bar-container">
                             <span class="radar-label" style="font-size: 0.85rem; font-weight: 600; width: 140px;">${item.label}</span>
@@ -1114,11 +1245,11 @@
 
         setTimeout(() => {
             const stats = [
-                { label: "Táº¥n cÃ´ng (Attacking)", val: overview.attacking || 50 },
-                { label: "Ká»¹ thuáº­t (Technical)", val: overview.technical || 50 },
-                { label: "Chiáº¿n thuáº­t (Tactical)", val: overview.tactical || 50 },
-                { label: "PhÃ²ng ngá»± (Defending)", val: overview.defending || 50 },
-                { label: "SÃ¡ng táº¡o (Creativity)", val: overview.creativity || 50 }
+                { label: "Tấn công (Attacking)", val: overview.attacking || 50 },
+                { label: "Kỹ thuật (Technical)", val: overview.technical || 50 },
+                { label: "Chiến thuật (Tactical)", val: overview.tactical || 50 },
+                { label: "Phòng ngự (Defending)", val: overview.defending || 50 },
+                { label: "Sáng tạo (Creativity)", val: overview.creativity || 50 }
             ];
             stats.forEach(item => {
                 const el = document.getElementById(`bar-${item.label.replace(/[^a-zA-Z]/g, '')}`);
@@ -1127,115 +1258,58 @@
         }, 100);
     }
 
-    async function showPlayerProfile(playerId, teamId) {
+    // --- TAB SWITCH HELPER FOR OFFLINE STATS ---
+    window.switchStatsTab = function(index) {
+        document.querySelectorAll('.stats-tab-pane').forEach((el, idx) => {
+            el.style.display = idx === index ? 'block' : 'none';
+        });
+        document.querySelectorAll('.stats-tabs .tab-btn').forEach((btn, idx) => {
+            if (idx === index) {
+                btn.style.background = 'rgba(0, 240, 255, 0.1)';
+                btn.style.borderColor = 'var(--accent-glow)';
+            } else {
+                btn.style.background = 'rgba(255,255,255,0.05)';
+                btn.style.borderColor = 'var(--border-color)';
+            }
+        });
+    };
+
+    async function showPlayerProfile(playerId, teamId, season = null) {
         const fullCacheKey = `player:${playerId}`;
         const basicCacheKey = `player-basic:${playerId}`;
+        const statsCacheKey = `player-stats:${playerId}`;
         const cachedFull = getFreshCachedData(fullCacheKey);
         const cachedBasic = getFreshCachedData(basicCacheKey);
+        const cachedStats = getFreshCachedData(statsCacheKey) || { stats: [] };
 
         if (cachedFull) {
-            renderPlayerProfile(playerId, teamId, cachedFull, !hasPlayerAttributes(cachedFull));
+            renderPlayerProfile(playerId, teamId, cachedFull, cachedStats, !hasPlayerAttributes(cachedFull), season);
             if (hasPlayerAttributes(cachedFull)) return;
         } else if (cachedBasic) {
-            renderPlayerProfile(playerId, teamId, cachedBasic, true);
+            renderPlayerProfile(playerId, teamId, cachedBasic, cachedStats, true, season);
         } else {
-            modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Dang nap ho so cau thu tu cache...</div>`;
+            modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Đang nạp hồ sơ cầu thủ...</div>`;
         }
 
         try {
-            const data = await fetchAndCacheJson(fullCacheKey, `${API_BASE}/api/player/${playerId}`);
-            renderPlayerProfile(playerId, teamId, data, false);
-        } catch (err) {
-            console.error("Loi tai chi tiet cau thu:", err);
-            if (!cachedFull && !cachedBasic) {
-                modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: #ff3b30">Loi khi tai thong tin cau thu tu REST API.</div>`;
+            const [detailsResult, statsResult] = await Promise.allSettled([
+                fetchAndCacheJson(fullCacheKey, `${API_BASE}/api/player/${playerId}`),
+                fetchAndCacheJson(statsCacheKey, `${API_BASE}/api/player/${playerId}/stats`)
+            ]);
+
+            const detailsData = detailsResult.status === "fulfilled" ? detailsResult.value : (cachedFull || cachedBasic);
+            const statsData = statsResult.status === "fulfilled" ? statsResult.value : cachedStats;
+
+            if (detailsData) {
+                renderPlayerProfile(playerId, teamId, detailsData, statsData, false, season);
+            } else {
+                throw new Error("Could not load player details");
             }
-        }
-        return;
-
-        modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: var(--text-secondary)">Đang nạp hồ sơ cầu thủ từ REST API...</div>`;
-
-        try {
-            const data = await getCachedJson(`player:${playerId}`, `${API_BASE}/api/player/${playerId}`);
-            
-            const player = data.player || {};
-            const attrs = data.attributes || {};
-            const overview = (attrs.playerAttributeOverviews && attrs.playerAttributeOverviews[0]) || {};
-
-            modalBody.innerHTML = `
-                <button class="btn-search" style="margin-bottom: 1.5rem; padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="showTeamDetails(${teamId})">&larr; QUAY LẠI ĐỘI BÓNG</button>
-                
-                <div class="profile-container">
-                    <div class="profile-header" style="display: flex; align-items: center; gap: 1.5rem;">
-                        <img src="${player.avatar_url_local || `https://img.sofascore.com/api/v1/player/${playerId}/image`}" alt="${player.name}" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.05); border: 2px solid var(--primary-glow); padding: 2px;" onerror="this.src='https://www.sofascore.com/static/images/placeholders/player.png'">
-                        <div>
-                            <h3 style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, var(--accent-glow), var(--primary-glow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-                                ${player.fullName || player.name}
-                            </h3>
-                            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.3rem; font-weight: 500;">
-                                Số áo: ${player.shirtNumber || player.jerseyNumber || 'N/A'} | Vị trí: ${positionNameFull(player.position)}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="details-grid">
-                        <div class="detail-card">
-                            <label>Chiều cao</label>
-                            <p>${player.height ? player.height + ' cm' : 'Không rõ'}</p>
-                        </div>
-                        <div class="detail-card">
-                            <label>Chân thuận</label>
-                            <p>${preferredFootVi(player.preferredFoot)}</p>
-                        </div>
-                        <div class="detail-card">
-                            <label>Giá trị thị trường</label>
-                            <p>${player.proposedMarketValue ? '€' + (player.proposedMarketValue / 1000000).toFixed(1) + 'M' : 'N/A'}</p>
-                        </div>
-                        <div class="detail-card">
-                            <label>Quốc tịch</label>
-                            <p>${player.country?.name || 'Không rõ'}</p>
-                        </div>
-                    </div>
-
-                    <h4 style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">Chỉ số Kỹ thuật & Tư duy chiến thuật</h4>
-                    <div class="radar-stats">
-                        ${[
-                            { label: "Tấn công (Attacking)", val: overview.attacking || 50 },
-                            { label: "Kỹ thuật (Technical)", val: overview.technical || 50 },
-                            { label: "Chiến thuật (Tactical)", val: overview.tactical || 50 },
-                            { label: "Phòng ngự (Defending)", val: overview.defending || 50 },
-                            { label: "Sáng tạo (Creativity)", val: overview.creativity || 50 }
-                        ].map(item => `
-                            <div class="radar-bar-container">
-                                <span class="radar-label" style="font-size: 0.85rem; font-weight: 600; width: 140px;">${item.label}</span>
-                                <div class="radar-track">
-                                    <div class="radar-fill" id="bar-${item.label.replace(/[^a-zA-Z]/g, '')}" style="width: 0%"></div>
-                                </div>
-                                <span class="radar-val-num" style="font-size: 0.85rem; font-weight: 700; width: 30px; text-align: right; color: var(--accent-glow);">${item.val}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-
-            // Kích hoạt hiệu ứng chuyển động tăng dần (Micro-animation) cho các thanh chỉ số
-            setTimeout(() => {
-                const stats = [
-                    { label: "Tấn công (Attacking)", val: overview.attacking || 50 },
-                    { label: "Kỹ thuật (Technical)", val: overview.technical || 50 },
-                    { label: "Chiến thuật (Tactical)", val: overview.tactical || 50 },
-                    { label: "Phòng ngự (Defending)", val: overview.defending || 50 },
-                    { label: "Sáng tạo (Creativity)", val: overview.creativity || 50 }
-                ];
-                stats.forEach(item => {
-                    const el = document.getElementById(`bar-${item.label.replace(/[^a-zA-Z]/g, '')}`);
-                    if (el) el.style.width = `${item.val}%`;
-                });
-            }, 100);
-
         } catch (err) {
             console.error("Lỗi tải chi tiết cầu thủ:", err);
-            modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: #ff3b30">Lỗi khi tải thông tin cầu thủ từ REST API.</div>`;
+            if (!cachedFull && !cachedBasic) {
+                modalBody.innerHTML = `<div style="text-align: center; padding: 4rem 0; color: #ff3b30">Lỗi khi tải thông tin cầu thủ từ REST API.</div>`;
+            }
         }
     }
 
@@ -1261,17 +1335,43 @@
     // --- SỰ KIỆN NÚT ---
     searchBtn.onclick = defSearch;
     searchInput.onkeypress = (e) => { if (e.key === 'Enter') defSearch(); };
-    closeOverlayBtn.onclick = () => detailsOverlay.classList.remove('active');
+    
+    closeOverlayBtn.onclick = () => {
+        detailsOverlay.classList.remove('active');
+        window.currentOpenTeamId = null;
+    };
     
     // Đóng modal khi click ra ngoài vùng xám
     detailsOverlay.onclick = (e) => {
         if (e.target === detailsOverlay) {
             detailsOverlay.classList.remove('active');
+            window.currentOpenTeamId = null;
         }
     };
 
     // --- KHỞI CHẠY ---
     connectWebSocket();
+
+    // Tự động mở modal nếu có tham số teamId trên URL query, đồng thời đồng bộ nút Danh sách đội bóng
+    const urlParams = new URLSearchParams(window.location.search);
+    const teamIdParam = urlParams.get('teamId');
+    const seasonParam = urlParams.get('season');
+    
+    if (seasonParam) {
+        currentSeason = seasonParam;
+        const selectEl = document.getElementById("seasonSelect");
+        if (selectEl) {
+            selectEl.value = seasonParam;
+        }
+        const teamsListBtn = document.getElementById("teamsListBtn");
+        if (teamsListBtn) {
+            teamsListBtn.href = `/teams?season=${encodeURIComponent(seasonParam)}`;
+        }
+    }
+    
+    if (teamIdParam) {
+        showTeamDetails(teamIdParam, seasonParam || currentSeason);
+    }
 
 </script>
 </body>

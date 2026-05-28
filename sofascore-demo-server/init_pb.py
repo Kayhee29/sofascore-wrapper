@@ -114,10 +114,12 @@ COLLECTIONS = [
             {"name": "logo_file",      "type": "file", "options": {"maxSelect": 1, "maxSize": 5242880,
                                         "mimeTypes": ["image/png","image/jpeg","image/webp","image/svg+xml"]}},
             # Cross-source IDs
-            {"name": "fbref_id",       "type": "text"},  # FBref squad slug
-            {"name": "understat_id",   "type": "text"},
-            {"name": "whoscored_id",   "type": "text"},
-            {"name": "espn_id",        "type": "text"},
+            {"name": "fbref_id",              "type": "text"},  # FBref squad slug
+            {"name": "understat_id",          "type": "text"},
+            {"name": "whoscored_id",          "type": "text"},
+            {"name": "espn_id",               "type": "text"},
+            {"name": "apifootball_id",        "type": "text"},  # api-football.com team ID
+            {"name": "apifootball_logo_url",  "type": "text"},  # logo URL từ media.api-sports.io
             # Extra info
             {"name": "country",        "type": "text"},
             {"name": "founded_year",   "type": "number"},

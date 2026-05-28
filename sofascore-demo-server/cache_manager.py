@@ -59,7 +59,7 @@ class PocketBaseCacheManager:
 
     # --- SQUAD (ĐỘI HÌNH CÂU LẠC BỘ) CACHING ---
     
-    async def get_squad_cache(self, team_id: int) -> Optional[dict]:
+    async def get_squad_cache(self, team_id: int, ignore_expiration: bool = False) -> Optional[dict]:
         """
         Lấy cache đội hình của câu lạc bộ. Trả về dict hoặc None nếu hết hạn/không có.
         """
@@ -68,10 +68,14 @@ class PocketBaseCacheManager:
                 f"sofascore_id = '{team_id}'"
             )
             # Kiểm tra thời hạn TTL
-            expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
-            if datetime.datetime.now(datetime.timezone.utc) > expired_time:
-                print(f"[CACHE] Đội hình của Team ID {team_id} đã quá hạn TTL.")
-                return None
+            if not ignore_expiration and record.ttl_expired:
+                try:
+                    expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+                    if datetime.datetime.now(datetime.timezone.utc) > expired_time:
+                        print(f"[CACHE] Đội hình của Team ID {team_id} đã quá hạn TTL.")
+                        return None
+                except ValueError:
+                    pass
                 
             print(f"[CACHE HIT] Lấy Đội hình của Team ID {team_id} từ PocketBase.")
             return record.players_list
@@ -195,7 +199,7 @@ class PocketBaseCacheManager:
 
     # --- TEAM TRANSFERS CACHING ---
 
-    async def get_transfer_cache(self, team_id: int) -> Optional[dict]:
+    async def get_transfer_cache(self, team_id: int, ignore_expiration: bool = False) -> Optional[dict]:
         """
         Lay cache chuyen nhuong cua cau lac bo.
         """
@@ -203,10 +207,14 @@ class PocketBaseCacheManager:
             record = self.client.collection("team_transfers").get_first_list_item(
                 f"sofascore_id = '{team_id}'"
             )
-            expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
-            if datetime.datetime.now(datetime.timezone.utc) > expired_time:
-                print(f"[CACHE] Du lieu chuyen nhuong Team ID {team_id} da qua han TTL.")
-                return None
+            if not ignore_expiration and record.ttl_expired:
+                try:
+                    expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+                    if datetime.datetime.now(datetime.timezone.utc) > expired_time:
+                        print(f"[CACHE] Du lieu chuyen nhuong Team ID {team_id} da qua han TTL.")
+                        return None
+                except ValueError:
+                    pass
 
             print(f"[CACHE HIT] Lay chuyen nhuong Team ID {team_id} tu PocketBase.")
             return record.transfers_json
@@ -244,19 +252,39 @@ class PocketBaseCacheManager:
 
     # --- TEAM (THONG TIN DOI BONG) CACHING ---
 
-    async def get_team_cache(self, team_id: int) -> Optional[dict]:
+    async def get_team_cache(self, team_id: int, ignore_expiration: bool = False) -> Optional[dict]:
         """
         Lấy cache thông tin câu lạc bộ. 
         Nếu có ảnh logo đã lưu cục bộ, tự động viết đè URL tĩnh của PocketBase để phản hồi nhanh.
         """
         try:
-            record = self.client.collection("teams").get_first_list_item(
-                f"sofascore_id = '{team_id}'"
-            )
-            expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
-            if datetime.datetime.now(datetime.timezone.utc) > expired_time:
-                print(f"[CACHE] Dữ liệu Team ID {team_id} đã quá hạn TTL.")
-                return None
+            team_id_str = str(team_id)
+            record = None
+            if not team_id_str.isdigit():
+                try:
+                    record = self.client.collection("teams").get_first_list_item(
+                        f"name = '{team_id_str}' || fullName = '{team_id_str}' || sofascore_id = '{team_id_str}'"
+                    )
+                except ClientResponseError:
+                    try:
+                        record = self.client.collection("teams").get_first_list_item(
+                            f"name ~ '{team_id_str}'"
+                        )
+                    except ClientResponseError:
+                        pass
+            
+            if not record:
+                record = self.client.collection("teams").get_first_list_item(
+                    f"sofascore_id = '{team_id_str}'"
+                )
+            if not ignore_expiration and record.ttl_expired:
+                try:
+                    expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+                    if datetime.datetime.now(datetime.timezone.utc) > expired_time:
+                        print(f"[CACHE] Dữ liệu Team ID {team_id} đã quá hạn TTL.")
+                        return None
+                except ValueError:
+                    pass
                 
             raw_json = record.raw_json or {}
             
@@ -332,14 +360,9 @@ class PocketBaseCacheManager:
                 batch=200,
                 query_params={"sort": "-updated"}
             )
-            now = datetime.datetime.now(datetime.timezone.utc)
             results = []
 
             for record in records:
-                expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
-                if now > expired_time:
-                    continue
-
                 raw_json = record.raw_json or {}
                 team = raw_json.get("team") or {}
                 if not team:
@@ -371,10 +394,55 @@ class PocketBaseCacheManager:
                 if len(results) >= limit:
                     break
 
+            # Bo sung tim kiem tu soccerdata (player_season_stats hoac team_season_stats)
+            if len(results) < limit:
+                extra_team_names = set()
+                try:
+                    # Query player_season_stats
+                    pss_recs = self.client.collection("player_season_stats").get_full_list(
+                        query_params={"filter": f"team_id ~ '{query}'"}
+                    )
+                    for r in pss_recs:
+                        if r.team_id and query.lower() in r.team_id.lower():
+                            extra_team_names.add(r.team_id)
+                except Exception:
+                    pass
+
+                try:
+                    # Query team_season_stats
+                    tss_recs = self.client.collection("team_season_stats").get_full_list(
+                        query_params={"filter": f"team_id ~ '{query}'"}
+                    )
+                    for r in tss_recs:
+                        if r.team_id and query.lower() in r.team_id.lower():
+                            extra_team_names.add(r.team_id)
+                except Exception:
+                    pass
+
+                for t_name in extra_team_names:
+                    name_exists = any(
+                        res["entity"].get("name", "").lower() == t_name.lower() or 
+                        res["entity"].get("fullName", "").lower() == t_name.lower()
+                        for res in results
+                    )
+                    if not name_exists:
+                        results.append({
+                            "type": "team",
+                            "entity": {
+                                "id": t_name,
+                                "name": t_name,
+                                "fullName": t_name,
+                                "sport": {"name": "Football", "slug": "football"},
+                                "logo_url_local": None
+                            }
+                        })
+                        if len(results) >= limit:
+                            break
+
             if results:
                 print(f"[CACHE HIT] Tim thay {len(results)} doi bong trong cache voi tu khoa '{query}'.")
 
-            return {"results": results}
+            return {"results": results[:limit]}
         except Exception as e:
             print(f"[CACHE ERROR] Loi search_team_cache: {e}")
             return {"results": []}
@@ -393,14 +461,9 @@ class PocketBaseCacheManager:
                 batch=200,
                 query_params={"sort": "-updated"}
             )
-            now = datetime.datetime.now(datetime.timezone.utc)
             results = []
 
             for record in records:
-                expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
-                if now > expired_time:
-                    continue
-
                 raw_json = record.raw_json or {}
                 player = raw_json.get("player") or {}
                 if not player:
@@ -437,10 +500,50 @@ class PocketBaseCacheManager:
                 if len(results) >= limit:
                     break
 
+            # Bo sung tim kiem tu soccerdata (player_season_stats)
+            if len(results) < limit:
+                try:
+                    stats_records = self.client.collection("player_season_stats").get_full_list(
+                        query_params={"filter": f"player_id ~ '{query}'"}
+                    )
+                    extra_players = {}
+                    for r in stats_records:
+                        p_id = r.player_id
+                        p_name = p_id.replace("_", " ").title()
+                        if p_id not in extra_players:
+                            extra_players[p_id] = {
+                                "id": p_id,
+                                "name": p_name,
+                                "position": "M",
+                                "team": {
+                                    "name": r.team_id
+                                },
+                                "sport": {"name": "Football", "slug": "football"}
+                            }
+                    
+                    for p_id, p_obj in extra_players.items():
+                        exists = False
+                        for res in results:
+                            p_entity = res["entity"]
+                            p_entity_name = p_entity.get("name", "")
+                            if p_entity_name.lower().replace(" ", "_") == p_id:
+                                exists = True
+                                break
+                        if not exists:
+                            results.append({
+                                "type": "player",
+                                "entity": p_obj,
+                                "cache_status": "stats_only"
+                            })
+                            if len(results) >= limit:
+                                break
+                except Exception as e:
+                    print(f"[CACHE] Error searching player_season_stats: {e}")
+
             if results:
                 print(f"[CACHE HIT] Tim thay {len(results)} cau thu trong cache voi tu khoa '{query}'.")
 
-            return {"results": results}
+            return {"results": results[:limit]}
         except Exception as e:
             print(f"[CACHE ERROR] Loi search_player_cache: {e}")
             return {"results": []}
@@ -462,21 +565,42 @@ class PocketBaseCacheManager:
 
     # --- PLAYER (HO SO CAU THU) CACHING ---
 
-    async def get_player_cache(self, player_id: int) -> Optional[dict]:
+    async def get_player_cache(self, player_id: int, ignore_expiration: bool = False) -> Optional[dict]:
         """
         Lấy cache hồ sơ và chỉ số cầu thủ. 
         Nếu có tệp ảnh chân dung cục bộ, tự động viết đè link ảnh cục bộ PB.
         """
         try:
-            record = self.client.collection("players").get_first_list_item(
-                f"sofascore_id = '{player_id}'"
-            )
-            expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
-            if datetime.datetime.now(datetime.timezone.utc) > expired_time:
-                print(f"[CACHE] Dữ liệu Cầu thủ ID {player_id} đã quá hạn TTL.")
-                return None
+            player_id_str = str(player_id)
+            record = None
+            if not player_id_str.isdigit():
+                display_name = player_id_str.replace("_", " ").title()
+                try:
+                    record = self.client.collection("players").get_first_list_item(
+                        f"name = '{display_name}' || sofascore_id = '{player_id_str}'"
+                    )
+                except ClientResponseError:
+                    try:
+                        record = self.client.collection("players").get_first_list_item(
+                            f"name ~ '{display_name}'"
+                        )
+                    except ClientResponseError:
+                        pass
+            
+            if not record:
+                record = self.client.collection("players").get_first_list_item(
+                    f"sofascore_id = '{player_id_str}'"
+                )
+            if not ignore_expiration and record.ttl_expired:
+                try:
+                    expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+                    if datetime.datetime.now(datetime.timezone.utc) > expired_time:
+                        print(f"[CACHE] Dữ liệu Cầu thủ ID {player_id} đã quá hạn TTL.")
+                        return None
+                except ValueError:
+                    pass
                 
-            raw_json = record.raw_json
+            raw_json = record.raw_json or {}
             
             # Ghi đè đường dẫn ảnh cục bộ
             if record.avatar_file and "player" in raw_json:
@@ -541,7 +665,7 @@ class PocketBaseCacheManager:
 
     # --- LEAGUE (THÔNG TIN GIẢI ĐẤU & BẢNG XẾP HẠNG) CACHING ---
     
-    async def get_league_cache(self, league_id: int, season_id: int) -> Optional[dict]:
+    async def get_league_cache(self, league_id: int, season_id: int, ignore_expiration: bool = False) -> Optional[dict]:
         """
         Lấy cache bảng xếp hạng giải đấu cho một mùa giải cụ thể.
         Nếu có tệp logo giải đấu đã cache cục bộ, tự động viết đè URL tĩnh PocketBase để phản hồi nhanh.
@@ -551,12 +675,16 @@ class PocketBaseCacheManager:
             record = self.client.collection("leagues").get_first_list_item(
                 f"sofascore_id = '{key}'"
             )
-            expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
-            if datetime.datetime.now(datetime.timezone.utc) > expired_time:
-                print(f"[CACHE] Dữ liệu Giải đấu {key} đã quá hạn TTL.")
-                return None
+            if not ignore_expiration and record.ttl_expired:
+                try:
+                    expired_time = datetime.datetime.fromisoformat(record.ttl_expired.replace("Z", "+00:00"))
+                    if datetime.datetime.now(datetime.timezone.utc) > expired_time:
+                        print(f"[CACHE] Dữ liệu Giải đấu {key} đã quá hạn TTL.")
+                        return None
+                except ValueError:
+                    pass
                 
-            raw_json = record.raw_json
+            raw_json = record.raw_json or {}
             
             # Ghi đè đường dẫn logo giải đấu cục bộ nếu có
             if record.logo_file and raw_json:

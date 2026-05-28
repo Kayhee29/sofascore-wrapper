@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premier League Teams & Standings</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0c0819;
+            --surface-color: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.07);
+            --primary-glow: #9e43ff;
+            --accent-glow: #00f0ff;
+            --success-color: #39ff14;
+            --warning-color: #ffb700;
+            --danger-color: #ff3b30;
+            --text-primary: #f0ecfa;
+            --text-secondary: #a39eb5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(158, 67, 255, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 240, 255, 0.1) 0%, transparent 40%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* --- HEADER --- */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .logo-section h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #00f0ff, #9e43ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-section p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.2rem;
+        }
+
+        .btn-back {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            padding: 0.7rem 1.4rem;
+            border-radius: 12px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .btn-back:hover {
+            border-color: var(--accent-glow);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+            transform: translateX(-3px);
+        }
+
+        /* --- LEAGUE HEADER CARD --- */
+        .league-card {
+            background: linear-gradient(135deg, rgba(60, 28, 90, 0.2) 0%, rgba(248, 1, 88, 0.05) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .league-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 80% 20%, rgba(158, 67, 255, 0.15) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .league-logo {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 18px;
+            border: 1px solid var(--border-color);
+        }
+
+        .league-info h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .league-info p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.3rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .country-flag {
+            width: 20px;
+            height: 14px;
+            border-radius: 2px;
+            object-fit: cover;
+        }
+
+        /* --- GRID LAYOUT --- */
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        /* --- TEAM CARD --- */
+        .team-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            backdrop-filter: blur(12px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .team-card:hover {
+            border-color: var(--primary-glow);
+            box-shadow: 0 8px 30px rgba(158, 67, 255, 0.18);
+            transform: translateY(-4px);
+        }
+
+        .team-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .rank-number {
+            font-size: 2rem;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.07);
+            position: absolute;
+            right: 1.5rem;
+            top: 1rem;
+            font-style: italic;
+            transition: color 0.3s ease;
+        }
+
+        .team-card:hover .rank-number {
+            color: rgba(0, 240, 255, 0.15);
+        }
+
+        .team-logo-small {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .team-name-section h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .team-name-section p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* --- STATS GRID --- */
+        .stats-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            padding: 0.6rem;
+            text-align: center;
+            gap: 4px;
+        }
+
+        .stat-col {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-col span.val {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-col span.lbl {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* --- DETAILS LINE --- */
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            padding-bottom: 6px;
+            margin-top: 2px;
+        }
+
+        .details-row span.lbl {
+            color: var(--text-secondary);
+        }
+
+        .details-row span.val {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .btn-view-squad {
+            background: linear-gradient(135deg, var(--primary-glow) 0%, #7c22ff 100%);
+            border: none;
+            outline: none;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 700;
+            padding: 0.6rem;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(158, 67, 255, 0.25);
+            transition: all 0.3s ease;
+            margin-top: 4px;
+        }
+
+        .btn-view-squad:hover {
+            box-shadow: 0 4px 20px rgba(158, 67, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        /* --- LOADER --- */
+        .loader-container {
+            text-align: center;
+            padding: 5rem 0;
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.05);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border-left-color: var(--accent-glow);
+            margin: 0 auto 1.5rem auto;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- HEADER -->
+    <header>
+        <div class="logo-section">
+            <h1>SOFASCORE REALTIME</h1>
+            <p>Giải đấu ngoại tuyến & bảng xếp hạng các câu lạc bộ</p>
+        </div>
+        <a href="/" class="btn-back" id="backToDashboardBtn">&larr; QUAY LẠI DASHBOARD</a>
+    </header>
+
+    <!-- LEAGUE HERO -->
+    <div class="league-card" id="leagueHero">
+        <img src="https://img.sofascore.com/api/v1/unique-tournament/17/image" alt="Premier League Logo" class="league-logo" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 80 80\'><rect width=\'80\' height=\'80\' rx=\'18\' fill=\'%23ffffff10\'/><text x=\'50%25\' y=\'55%25\' dominant-baseline=\'middle\' text-anchor=\'middle\' font-size=\'32\' fill=\'%23ffffff40\'>🏆</text></svg>'">
+        <div class="league-info">
+            <h2 id="leagueTitle">Premier League</h2>
+            <p id="leagueSub">
+                <img src="https://img.sofascore.com/api/v1/category/1/image" alt="England Flag" class="country-flag" id="leagueFlag"> 
+                Ngoại Hạng Anh
+            </p>
+        </div>
+        <div style="margin-left: auto; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; z-index: 10;">
+            <label for="seasonSelect" style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Chọn mùa giải</label>
+            <select id="seasonSelect" style="background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.6rem 1.2rem; border-radius: 12px; font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 600; cursor: pointer; outline: none; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onchange="changeSeason(this.value)">
+                <option value="2025/26" selected>Mùa giải 2025/26</option>
+                <option value="2024/25">Mùa giải 2024/25</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- LOADER -->
+    <div id="loader" class="loader-container">
+        <div class="spinner"></div>
+        Đang tải bảng xếp hạng Ngoại Hạng Anh...
+    </div>
+
+    <!-- TEAMS GRID -->
+    <div class="teams-grid" id="teamsGrid" style="display: none;">
+        <!-- Nạp động -->
+    </div>
+</div>
+
+<script>
+    const API_BASE = "http://127.0.0.1:8000";
+    const LEAGUE_ID = "17"; // Premier League ID
+    let currentSeason = "2025/26"; // Mặc định mùa giải 25-26 như yêu cầu
+
+    async function loadStandings() {
+        const loader = document.getElementById("loader");
+        const grid = document.getElementById("teamsGrid");
+
+        // Đọc season từ URL query hoặc từ dropdown select
+        const urlParams = new URLSearchParams(window.location.search);
+        const seasonParam = urlParams.get('season');
+        const selectEl = document.getElementById("seasonSelect");
+        
+        if (seasonParam) {
+            currentSeason = seasonParam;
+            if (selectEl) selectEl.value = currentSeason;
+        } else if (selectEl) {
+            currentSeason = selectEl.value;
+        }
+
+        // Cập nhật text phụ trong header card
+        const subEl = document.getElementById("leagueSub");
+        if (subEl) {
+            subEl.innerHTML = `
+                <img src="https://img.sofascore.com/api/v1/category/1/image" alt="England Flag" class="country-flag" id="leagueFlag"> 
+                Ngoại Hạng Anh | Mùa giải ${currentSeason}
+            `;
+        }
+
+        // Cập nhật link quay lại Dashboard
+        const backBtn = document.getElementById("backToDashboardBtn");
+        if (backBtn) {
+            backBtn.href = `/?season=${encodeURIComponent(currentSeason)}`;
+        }
+
+        loader.style.display = "block";
+        grid.style.display = "none";
+
+        try {
+            const res = await fetch(`${API_BASE}/api/league/${LEAGUE_ID}/standings?season=${encodeURIComponent(currentSeason)}`);
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            
+            // Cập nhật thông tin giải đấu
+            if (data.league) {
+                document.getElementById("leagueTitle").innerText = data.league.name || "Premier League";
+                if (data.league.flag) {
+                    const flagUrl = `https://img.sofascore.com/api/v1/category/1/image`; // flag url
+                    document.getElementById("leagueFlag").src = flagUrl;
+                }
+            }
+
+            const standingsObj = data.standings || {};
+            const standingsList = standingsObj.standings || [];
+            if (standingsList.length === 0) {
+                loader.innerHTML = `<div style="color: #ff3b30; padding: 2rem;">Không tìm thấy dữ liệu bảng xếp hạng giải đấu.</div>`;
+                return;
+            }
+
+            const mainStandings = standingsList[0];
+            const rows = mainStandings.rows || [];
+
+            grid.innerHTML = "";
+            rows.forEach(row => {
+                const team = row.team || {};
+                const position = row.position || 0;
+                const points = row.points || 0;
+                const played = row.matches || row.played || 0;
+                const wins = row.wins || 0;
+                const draws = row.draws || 0;
+                const losses = row.losses || 0;
+                const goalDiff = row.scoreDiffFormatted || "0";
+                const goalsFor = row.scoresFor ?? "-";
+                const goalsAgainst = row.scoresAgainst ?? "-";
+
+                const colors = team.teamColors || {};
+                const primary = colors.primary || "#9e43ff";
+                const secondary = colors.secondary || "#ffffff";
+                const code = team.nameCode || (team.name || "???").substring(0, 3).toUpperCase();
+                const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' rx='12' fill='${primary}'/><text x='50%' y='56%' dominant-baseline='middle' text-anchor='middle' font-size='13' font-weight='800' fill='${secondary}' font-family='Arial,sans-serif'>${code}</text></svg>`;
+
+                // Nguồn logo theo thứ tự ưu tiên
+                const logoUrl = team.apifootball_logo_url
+                    || (team.apifootball_id ? `https://media.api-sports.io/football/teams/${team.apifootball_id}.png` : null)
+                    || fallbackSvg;
+
+                const cardEl = document.createElement("div");
+                cardEl.className = "team-card";
+                cardEl.innerHTML = `
+                    <div class="rank-number">#${position}</div>
+                    <div class="team-card-header">
+                        <img src="${logoUrl}" alt="${team.name}" class="team-logo-small"
+                             onerror="this.onerror=null;this.src='${fallbackSvg}'">
+                        <div class="team-name-section">
+                            <h3>${team.name}</h3>
+                            <p>${team.fullName || team.name}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-summary">
+                        <div class="stat-col">
+                            <span class="val" style="color: var(--accent-glow);">${points}</span>
+                            <span class="lbl">PTS</span>
+                        </div>
+                        <div class="stat-col">
+                            <span class="val">${played}</span>
+                            <span class="lbl">MP</span>
+                        </div>
+                        <div class="stat-col">
+                            <span class="val" style="color: var(--success-color);">${wins}</span>
+                            <span class="lbl">W</span>
+                        </div>
+                        <div class="stat-col">
+                            <span class="val" style="color: var(--danger-color);">${losses}</span>
+                            <span class="lbl">L</span>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 0.3rem;">
+                        <div class="details-row">
+                            <span class="lbl">Hòa (Draws)</span>
+                            <span class="val" style="color: var(--warning-color);">${draws}</span>
+                        </div>
+                        <div class="details-row">
+                            <span class="lbl">Hiệu số bàn thắng</span>
+                            <span class="val" style="color: ${parseInt(goalDiff) >= 0 ? 'var(--success-color)' : 'var(--danger-color)'};">${goalDiff}</span>
+                        </div>
+                        <div class="details-row">
+                            <span class="lbl">Bàn thắng / Bàn thua</span>
+                            <span class="val">${goalsFor} : ${goalsAgainst}</span>
+                        </div>
+                    </div>
+
+                    <a href="/?teamId=${team.id}&season=${encodeURIComponent(currentSeason)}" class="btn-view-squad">XEM ĐỘI HÌNH & CHỈ SỐ</a>
+                `;
+                grid.appendChild(cardEl);
+            });
+
+            loader.style.display = "none";
+            grid.style.display = "grid";
+
+        } catch (err) {
+            console.error("Lỗi khi nạp bảng xếp hạng:", err);
+            const isNetworkError = err instanceof TypeError && err.message.includes("fetch");
+            loader.innerHTML = `
+                <div style="color: var(--danger-color); padding: 2rem;">
+                    <p style="font-weight: bold; margin-bottom: 0.5rem;">
+                        ${isNetworkError ? "Lỗi kết nối tới máy chủ REST API." : "Lỗi xử lý dữ liệu."}
+                    </p>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                        ${isNetworkError 
+                            ? "Vui lòng đảm bảo server uvicorn đang chạy trên cổng 8000." 
+                            : "Truy cập trang qua <b>http://127.0.0.1:8000/teams</b> (không mở file trực tiếp)."}
+                    </p>
+                    <p style="font-size: 0.78rem; color: #ff6b6b; font-family: monospace; background: rgba(255,0,0,0.07); padding: 0.5rem 0.8rem; border-radius: 8px; word-break: break-all;">
+                        ${err.message || String(err)}
+                    </p>
+                    <button onclick="loadStandings()" class="btn-back" style="margin: 1.5rem auto 0 auto; display: block; cursor: pointer;">THỬ LẠI</button>
+                </div>
+            `;
+        }
+    }
+
+    // Đổi mùa giải
+    window.changeSeason = function(newSeason) {
+        currentSeason = newSeason;
+        
+        // Cập nhật tham số URL mà không cần tải lại trang
+        const url = new URL(window.location);
+        url.searchParams.set('season', newSeason);
+        window.history.pushState({}, '', url);
+        
+        loadStandings();
+    };
+
+    // Chạy khi nạp trang
+    window.onload = loadStandings;
+</script>
+</body>
+</html>

@@ -45,11 +45,10 @@ DEFAULT_SEASON = "2025"  # soccerdata dùng "2025" cho 2024/25
 
 FBREF_STAT_TYPES = [
     "standard",
+    "keeper",
     "shooting",
-    "passing",
-    "defense",
-    "gk",
-    "playingtime",
+    "playing_time",
+    "misc",
 ]
 
 
@@ -135,16 +134,24 @@ def safe_int(val) -> Optional[int]:
 
 def df_row_to_dict(row) -> dict:
     """Chuyển pandas Series row thành dict JSON-serializable"""
+    import pandas as pd
+    import math
     result = {}
     for k, v in row.items():
-        if hasattr(v, 'item'):  # numpy scalar
+        if pd.isna(v):
+            v = None
+        elif hasattr(v, 'item'):  # numpy scalar
             v = v.item()
-        try:
-            import math
             if isinstance(v, float) and math.isnan(v):
                 v = None
-        except (TypeError, ValueError):
-            pass
+        elif hasattr(v, 'isoformat'):  # pandas Timestamp hoặc datetime
+            v = v.isoformat()
+        else:
+            try:
+                if isinstance(v, float) and math.isnan(v):
+                    v = None
+            except (TypeError, ValueError):
+                pass
         result[str(k)] = v
     return result
 
@@ -184,12 +191,26 @@ def sync_fbref_schedule(pb: PBClient, league_ss_id: str, season: str = DEFAULT_S
 
         home_score = row_dict.get("score_home")
         away_score = row_dict.get("score_away")
+        
+        # Fallback split score column if they are not directly available
+        if home_score is None or away_score is None:
+            score_str = row_dict.get("score")
+            if score_str and isinstance(score_str, str):
+                clean_score = score_str.replace("–", "-").replace("—", "-")
+                parts = clean_score.split("-")
+                if len(parts) == 2:
+                    try:
+                        home_score = int(parts[0].strip())
+                        away_score = int(parts[1].strip())
+                    except ValueError:
+                        pass
+                        
         date_val = row_dict.get("date")
 
         data = {
             "fbref_id":       fbref_game_id,
             "league_id":      league_ss_id,
-            "season":         f"{int(season)-1}/{season[-2:]}",
+            "season":         f"{season}/{str(int(season)+1)[-2:]}",
             "round":          safe_int(row_dict.get("round")),
             "date":           str(date_val) if date_val else None,
             "home_team_id":   str(row_dict.get("home_team", "")),
@@ -238,17 +259,38 @@ def sync_fbref_player_stats(pb: PBClient, league_ss_id: str, season: str = DEFAU
         for idx, row in df.iterrows():
             row_dict = df_row_to_dict(row)
 
-            # Index của FBref thường là MultiIndex (league, team, player)
-            player_name = str(row_dict.get("player", idx[-1] if hasattr(idx, '__len__') else idx))
-            team_name = str(row_dict.get("team", ""))
+            # Lấy player_name
+            player_name = row_dict.get("player")
+            if not player_name:
+                if hasattr(df.index, 'names') and "player" in df.index.names:
+                    player_name = idx[df.index.names.index("player")]
+                elif hasattr(idx, '__len__') and not isinstance(idx, str):
+                    player_name = idx[-1]
+                else:
+                    player_name = idx
+            player_name = str(player_name)
+
+            # Lấy team_name
+            team_name = row_dict.get("team")
+            if not team_name:
+                if hasattr(df.index, 'names') and "team" in df.index.names:
+                    team_name = idx[df.index.names.index("team")]
+                elif hasattr(idx, '__len__') and not isinstance(idx, str) and len(idx) > 1:
+                    team_name = idx[-2]
+                else:
+                    team_name = ""
+            team_name = str(team_name)
+
             source_key = f"pss:fbref:{fbref_league}:{season}:{stat_type}:{player_name}:{team_name}"
 
             data = {
+                "player_id":      player_name.lower().replace(" ", "_"),
                 "fbref_id":       player_name.lower().replace(" ", "_"),
                 "team_id":        team_name,
                 "league_id":      league_ss_id,
-                "season":         f"{int(season)-1}/{season[-2:]}",
-                "stat_type":      stat_type,
+                "season":         f"{season}/{str(int(season)+1)[-2:]}",
+                # Map to standard compatible schemas
+                "stat_type":      "gk" if stat_type == "keeper" else ("playingtime" if stat_type == "playing_time" else stat_type),
                 "source":         "fbref",
                 # Standard
                 "games":          safe_int(row_dict.get("games")),
@@ -324,13 +366,24 @@ def sync_fbref_team_stats(pb: PBClient, league_ss_id: str, season: str = DEFAULT
         count = 0
         for idx, row in df.iterrows():
             row_dict = df_row_to_dict(row)
-            team_name = str(row_dict.get("team", idx if isinstance(idx, str) else str(idx)))
+            
+            # Lấy team_name
+            team_name = row_dict.get("team")
+            if not team_name:
+                if hasattr(df.index, 'names') and "team" in df.index.names:
+                    team_name = idx[df.index.names.index("team")]
+                elif hasattr(idx, '__len__') and not isinstance(idx, str):
+                    team_name = idx[-1]
+                else:
+                    team_name = idx
+            team_name = str(team_name)
+
             source_key = f"tss:fbref:{fbref_league}:{season}:{stat_type}:{team_name}"
 
             data = {
                 "team_id":        team_name,
                 "league_id":      league_ss_id,
-                "season":         f"{int(season)-1}/{season[-2:]}",
+                "season":         f"{season}/{str(int(season)+1)[-2:]}",
                 "stat_type":      stat_type,
                 "source":         "fbref",
                 "goals":          safe_int(row_dict.get("goals")),
@@ -370,7 +423,7 @@ def sync_understat_player_stats(pb: PBClient, league_ss_id: str, season: str = D
         print(f"[SKIP] Không có Understat mapping cho SS ID {league_ss_id}")
         return
 
-    understat_season = str(int(season) - 1)  # Understat dùng năm bắt đầu (2024 cho 2024/25)
+    understat_season = season  # Dùng trực tiếp start year của season
     print(f"\n[Understat] Sync player stats: {understat_league} {understat_season}...")
 
     try:
@@ -387,6 +440,7 @@ def sync_understat_player_stats(pb: PBClient, league_ss_id: str, season: str = D
         source_key = f"pss:understat:{understat_league}:{understat_season}:{player_name}"
 
         data = {
+            "player_id":    player_name.lower().replace(" ", "_"),
             "fbref_id":     player_name.lower().replace(" ", "_"),
             "league_id":    league_ss_id,
             "season":       f"{understat_season}/{str(int(understat_season)+1)[-2:]}",
@@ -424,7 +478,7 @@ def sync_understat_shot_events(pb: PBClient, league_ss_id: str, season: str = DE
     if not understat_league:
         return
 
-    understat_season = str(int(season) - 1)
+    understat_season = season
     print(f"\n[Understat] Sync shot events: {understat_league} {understat_season}...")
 
     try:
@@ -477,7 +531,7 @@ def sync_clubelo(pb: PBClient, team_name: str, team_ss_id: str):
 
     try:
         elo = sd.ClubElo()
-        df = elo.read_by_team(team_name)
+        df = elo.read_team_history(team_name)
     except Exception as e:
         print(f"[ERR] ClubElo {team_name}: {e}")
         return
@@ -513,9 +567,9 @@ def main():
     pb = PBClient(PB_URL, ADMIN_EMAIL, ADMIN_PASSWORD)
 
     # ── Chọn giải đấu và mùa cần sync ──
-    # Mặc định: EPL 2024/25 (season="2025" trong soccerdata)
+    # Mặc định: EPL 2025/26 (season="2025" trong soccerdata)
     target_league = "17"   # 17 = Premier League trong Sofascore
-    target_season = "2025" # 2025 = mùa 2024/25
+    target_season = "2025" # 2025 = mùa 2025/26
 
     print(f"\n[INFO] Target: {LEAGUE_MAP[target_league]['name']} {target_season}")
 

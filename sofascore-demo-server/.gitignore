@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Môi trường ảo
+venv/
+env/
+.venv/
+
+# Biến môi trường — KHÔNG commit key lên git!
+.env
+.env.local
+.env.*.local
+
+# PocketBase data
+pb/pb_data/
+pb/pb_migrations/
+
+# State files
+.apifootball_key_state.json
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp

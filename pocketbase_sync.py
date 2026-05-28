@@ -20,8 +20,8 @@ import asyncio
 #  CẤU HÌNH
 # ─────────────────────────────────────────────
 PB_URL = "http://127.0.0.1:8090"
-ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "Password123456"  # Đổi cho khớp tài khoản của bạn
+ADMIN_EMAIL = "admin@sofascore.local"
+ADMIN_PASSWORD = "Admin123456789"  # Đổi cho khớp tài khoản của bạn
 
 
 # ─────────────────────────────────────────────
@@ -275,10 +275,12 @@ async def sync_team(pb: PocketBaseClient, team_id_ss: int, name: str, **kwargs) 
     """Đồng bộ một đội bóng, trả về source_key để dùng làm FK"""
     source_key = f"team:sofascore:{team_id_ss}"
     await pb.upsert("teams", source_key, {
-        "source_id":   str(team_id_ss),
-        "source":      "sofascore",
+        "sofascore_id": str(team_id_ss),
         "name":        name,
-        **kwargs
+        "fullName":    name,
+        "managerName": kwargs.get("manager_name", "Không rõ"),
+        "venueName":   kwargs.get("venue_name", "Không rõ"),
+        "logo_url":    kwargs.get("logo_url", "")
     })
     return source_key
 
@@ -292,23 +294,19 @@ async def sync_players_from_fbref(pb: PocketBaseClient, squad_file: str, team_so
     with open(squad_file, "r", encoding="utf-8") as f:
         players = json.load(f)
 
-    team_pb_id = make_id(team_source_key)
     count = 0
     for p in players:
         player_name = p.get("Player", "Unknown")
         # Source key duy nhất: tên + quốc tịch để tránh trùng
         source_key = f"player:fbref:{team_source_key}:{player_name}"
+        player_pb_id = make_id(source_key)
         await pb.upsert("players", source_key, {
-            "source_id":   player_name.lower().replace(" ", "_"),
-            "source":      "fbref",
-            "team_id":     team_pb_id,
+            "sofascore_id":   player_pb_id,
             "name":        player_name,
             "nationality": p.get("Nation", ""),
             "position":    p.get("Position", ""),
-            "age":         str(p.get("Age", "")),
-            "goals":       int(p.get("Goals", 0) or 0),
-            "assists":     int(p.get("Assists", 0) or 0),
-            "appearances": int(p.get("Appearances", 0) or 0),
+            "jersey_number": int(p.get("Jersey", 0)) if p.get("Jersey") else None,
+            "fbref_id":    player_name.lower().replace(" ", "_")
         })
         count += 1
 
@@ -337,16 +335,26 @@ async def sync_fixtures_from_sofascore(pb: PocketBaseClient, fixtures_file: str,
             home_key = f"team:sofascore:{fix.get('home_team', 'unknown').lower()}"
             away_key = arsenal_team_key
 
+        home_score = fix.get("home_score")
+        away_score = fix.get("away_score")
+        try:
+            home_score = int(home_score) if home_score not in (None, "", "-") else None
+        except ValueError:
+            home_score = None
+        try:
+            away_score = int(away_score) if away_score not in (None, "", "-") else None
+        except ValueError:
+            away_score = None
+
         await pb.upsert("matches", source_key, {
-            "source_id":       str(match_id),
-            "source":          "sofascore",
+            "sofascore_id":    str(match_id),
             "start_timestamp": fix.get("timestamp", 0),
-            "start_datetime":  fix.get("datetime", ""),
             "home_team_id":    make_id(home_key),
             "away_team_id":    make_id(away_key),
-            "home_score":      str(fix.get("home_score", "")),
-            "away_score":      str(fix.get("away_score", "")),
+            "home_score":      home_score,
+            "away_score":      away_score,
             "status":          fix.get("status_type", ""),
+            "source":          "sofascore",
         })
         count += 1
 
@@ -375,6 +383,7 @@ async def sync_match_details(pb: PocketBaseClient, details_file: str):
             "match_id":    match_pb_id,
             "type":        "goal",
             "description": str(g),
+            "source":      "sofascore",
         })
         count += 1
 
@@ -385,6 +394,7 @@ async def sync_match_details(pb: PocketBaseClient, details_file: str):
             "match_id":    match_pb_id,
             "type":        "card",
             "description": str(c),
+            "source":      "sofascore",
         })
         count += 1
 
@@ -395,6 +405,7 @@ async def sync_match_details(pb: PocketBaseClient, details_file: str):
             "match_id":    match_pb_id,
             "type":        "substitution",
             "description": str(s),
+            "source":      "sofascore",
         })
         count += 1
 
