@@ -1,0 +1,95 @@
+{
+  "match_id": 14023942,
+  "referee": "Chris Kavanagh",
+  "home_team": {
+    "name": "West Ham United",
+    "formation": "3-4-2-1",
+    "kit_colors": {
+      "primary": "74112e",
+      "number": "ffffff",
+      "outline": "74112e",
+      "fancyNumber": "ffffff"
+    },
+    "starters": [
+      "#1 Mads Hermansen (G) - Rating: N/A",
+      "#25 Jean-Clair Todibo (D) - Rating: N/A",
+      "#15 Konstantinos Mavropanos (D) - Rating: N/A",
+      "#4 Axel Disasi (D) - Rating: N/A",
+      "#29 Aaron Wan-Bissaka (D) - Rating: N/A",
+      "#28 Tomáš Souček (M) - Rating: N/A",
+      "#18 Mateus Fernandes (M) - Rating: N/A",
+      "#12 El Hadji Malick Diouf (D) - Rating: N/A",
+      "#20 Jarrod Bowen (M) - Rating: N/A",
+      "#7 Crysencio Summerville (M) - Rating: N/A",
+      "#11 Valentín Castellanos (F) - Rating: N/A"
+    ],
+    "substitutes": [
+      "#19 Pablo Felipe (F) - Rating: N/A",
+      "#9 Callum Wilson (F) - Rating: N/A",
+      "#23 Alphonse Aréola (G) - Rating: N/A",
+      "#2 Kyle Walker-Peters (D) - Rating: N/A",
+      "#3 Max Kilman (D) - Rating: N/A",
+      "#30 Oliver Scarles (D) - Rating: N/A",
+      "#27 Soungoutou Magassa (M) - Rating: N/A",
+      "#32 Freddie Potts (M) - Rating: N/A",
+      "#55 Mohamadou Kanté (M) - Rating: N/A"
+    ]
+  },
+  "away_team": {
+    "name": "Arsenal",
+    "formation": "4-2-3-1",
+    "kit_colors": {
+      "primary": "fafafa",
+      "number": "902937",
+      "outline": "fafafa",
+      "fancyNumber": "222226"
+    },
+    "starters": [
+      "#1 David Raya (G) - Rating: N/A",
+      "#4 Ben White (D) - Rating: N/A",
+      "#2 William Saliba (D) - Rating: N/A",
+      "#6 Gabriel Magalhães (D) - Rating: N/A",
+      "#33 Riccardo Calafiori (D) - Rating: N/A",
+      "#41 Declan Rice (M) - Rating: N/A",
+      "#49 Myles Lewis-Skelly (D) - Rating: N/A",
+      "#7 Bukayo Saka (F) - Rating: N/A",
+      "#10 Eberechi Eze (M) - Rating: N/A",
+      "#19 Leandro Trossard (F) - Rating: N/A",
+      "#14 Viktor Gyökeres (F) - Rating: N/A"
+    ],
+    "substitutes": [
+      "#36 Martín Zubimendi (M) - Rating: N/A",
+      "#3 Cristhian Mosquera (D) - Rating: N/A",
+      "#8 Martin Ødegaard (M) - Rating: N/A",
+      "#29 Kai Havertz (F) - Rating: N/A",
+      "#20 Noni Madueke (M) - Rating: N/A",
+      "#13 Kepa Arrizabalaga (G) - Rating: N/A",
+      "#5 Piero Hincapié (D) - Rating: N/A",
+      "#56 Max Dowman (M) - Rating: N/A",
+      "#11 Gabriel Martinelli (F) - Rating: N/A"
+    ]
+  },
+  "incidents": {
+    "goals": [
+      "[83'] Arsenal Ghi bàn: Leandro Trossard (regular)"
+    ],
+    "cards": [
+      "[34'] West Ham United Thẻ: Valentín Castellanos (yellow)",
+      "[38'] West Ham United Thẻ: Crysencio Summerville (yellow)",
+      "[68'] West Ham United Thẻ: Jean-Clair Todibo (yellow)",
+      "[77'] Arsenal Thẻ: Bukayo Saka (yellow)",
+      "[79'] Arsenal Thẻ: Cristhian Mosquera (yellow)",
+      "[89'] Arsenal Thẻ: William Saliba (yellow)",
+      "[90+1'] Arsenal Thẻ: Leandro Trossard (yellow)"
+    ],
+    "substitutions": [
+      "[28'] Arsenal Thay người: Martín Zubimendi vào thay Ben White",
+      "[46'] Arsenal Thay người: Cristhian Mosquera vào thay Riccardo Calafiori",
+      "[67'] Arsenal Thay người: Kai Havertz vào thay Martín Zubimendi",
+      "[67'] Arsenal Thay người: Martin Ødegaard vào thay Eberechi Eze",
+      "[67'] West Ham United Thay người: Pablo Felipe vào thay Valentín Castellanos",
+      "[80'] Arsenal Thay người: Noni Madueke vào thay Bukayo Saka",
+      "[85'] West Ham United Thay người: Callum Wilson vào thay Axel Disasi"
+    ]
+  }
+}

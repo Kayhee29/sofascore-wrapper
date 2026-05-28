@@ -24,7 +24,10 @@ from sofascore_wrapper.realtime_client import SofascoreRealtimeClient
 from sofascore_wrapper.player import Player
 
 from cache_manager import PocketBaseCacheManager
+from post_match_persister import PostMatchPersister, LiveScoreUpdater, FINISHED_STATUSES
+
 cache_manager = PocketBaseCacheManager()
+live_updater  = LiveScoreUpdater()
 
 # --- KHỞI TẠO CONNECTION MANAGER CHO WEBSOCKETS ---
 class ConnectionManager:
@@ -65,35 +68,51 @@ class ConnectionManager:
 manager = ConnectionManager()
 api_instance: Optional[SofascoreAPI] = None
 realtime_client: Optional[SofascoreRealtimeClient] = None
+persister: Optional[PostMatchPersister] = None
 
 # --- LIFESPAN EVENTS (STARTUP / SHUTDOWN) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global api_instance, realtime_client
+    global api_instance, realtime_client, persister
     
     # Khởi tạo API và Realtime Client
     print("[Server] Đang khởi tạo ứng dụng và kết nối đến Sofascore...")
     api_instance = SofascoreAPI()
     realtime_client = SofascoreRealtimeClient(api_instance.token_manager)
+    persister = PostMatchPersister(api_instance)
     
-    # Callback xử lý sự kiện realtime nhận được từ NATS và phát lại (broadcast)
+    # Callback xử lý sự kiện realtime nhận được từ NATS
     async def handle_nats_realtime_event(pub_data):
-        # Trích xuất và làm sạch dữ liệu phẳng của NATS trước khi broadcast
-        match_id = pub_data.get("id", "unknown")
+        match_id  = str(pub_data.get("id", "unknown"))
         home_score = pub_data.get("homeScore.display", pub_data.get("homeScore", {}).get("display", "-"))
         away_score = pub_data.get("awayScore.display", pub_data.get("awayScore", {}).get("display", "-"))
-        status = pub_data.get("status.description", pub_data.get("status", {}).get("description", "-"))
+        status_desc = pub_data.get("status.description", pub_data.get("status", {}).get("description", "-"))
+        status_type = pub_data.get("status.type",        pub_data.get("status", {}).get("type", "")).lower()
         
+        # [1] Broadcast WebSocket cho frontend (như cũ)
         broadcast_payload = {
-            "type": "live_score_update",
-            "match_id": match_id,
+            "type":       "live_score_update",
+            "match_id":   match_id,
             "home_score": home_score,
             "away_score": away_score,
-            "status": status,
-            "raw": pub_data
+            "status":     status_desc,
+            "raw":        pub_data
         }
         await manager.broadcast(broadcast_payload)
-        
+
+        # [2] Ghi live score vào PocketBase ngay lập tức (non-blocking)
+        asyncio.create_task(
+            asyncio.to_thread(
+                live_updater.update_live_score,
+                match_id, home_score, away_score, status_type
+            )
+        )
+
+        # [3] Nếu trận kết thúc → kích hoạt full post-match persist
+        if status_type in FINISHED_STATUSES or status_desc.lower() in FINISHED_STATUSES:
+            print(f"[Server] Match {match_id} kết thúc → trigger post-match persist")
+            asyncio.create_task(persister.on_match_finished(int(match_id), pub_data))
+
     # Đăng ký subscribe bóng đá trực tiếp
     await realtime_client.subscribe("sport.football", handle_nats_realtime_event)
     

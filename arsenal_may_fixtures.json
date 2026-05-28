@@ -1,0 +1,74 @@
+[
+  {
+    "id": 14023931,
+    "datetime": "02/05/2026 23:30",
+    "timestamp": 1777739400,
+    "tournament": "Premier League",
+    "home_team": "Arsenal",
+    "away_team": "Fulham",
+    "home_score": 3,
+    "away_score": 0,
+    "status_desc": "Ended",
+    "status_type": "finished"
+  },
+  {
+    "id": 15632635,
+    "datetime": "06/05/2026 02:00",
+    "timestamp": 1778007600,
+    "tournament": "UEFA Champions League, Knockout stage",
+    "home_team": "Arsenal",
+    "away_team": "Atlético Madrid",
+    "home_score": 1,
+    "away_score": 0,
+    "status_desc": "Ended",
+    "status_type": "finished"
+  },
+  {
+    "id": 14023942,
+    "datetime": "10/05/2026 22:30",
+    "timestamp": 1778427000,
+    "tournament": "Premier League",
+    "home_team": "West Ham United",
+    "away_team": "Arsenal",
+    "home_score": 0,
+    "away_score": 1,
+    "status_desc": "Ended",
+    "status_type": "finished"
+  },
+  {
+    "id": 14023950,
+    "datetime": "19/05/2026 02:00",
+    "timestamp": 1779130800,
+    "tournament": "Premier League",
+    "home_team": "Arsenal",
+    "away_team": "Burnley",
+    "home_score": 1,
+    "away_score": 0,
+    "status_desc": "Ended",
+    "status_type": "finished"
+  },
+  {
+    "id": 14023963,
+    "datetime": "24/05/2026 22:00",
+    "timestamp": 1779634800,
+    "tournament": "Premier League",
+    "home_team": "Crystal Palace",
+    "away_team": "Arsenal",
+    "home_score": 1,
+    "away_score": 2,
+    "status_desc": "Ended",
+    "status_type": "finished"
+  },
+  {
+    "id": 15632636,
+    "datetime": "30/05/2026 23:00",
+    "timestamp": 1780156800,
+    "tournament": "UEFA Champions League, Knockout stage",
+    "home_team": "Paris Saint-Germain",
+    "away_team": "Arsenal",
+    "home_score": "-",
+    "away_score": "-",
+    "status_desc": "Not started",
+    "status_type": "notstarted"
+  }
+]
