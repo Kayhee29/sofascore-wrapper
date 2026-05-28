@@ -5,11 +5,15 @@ import sys
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any, Optional
 
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-# Đảm bảo python có thể import sofascore_wrapper từ thư mục cha
+# Đảm bảo python có thể import sofascore_wrapper từ thư mục cha và các file cục bộ
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.dirname(__file__))
 
 from sofascore_wrapper.api import SofascoreAPI
 from sofascore_wrapper.search import Search
@@ -18,6 +22,9 @@ from sofascore_wrapper.match import Match
 from sofascore_wrapper.league import League
 from sofascore_wrapper.realtime_client import SofascoreRealtimeClient
 from sofascore_wrapper.player import Player
+
+from cache_manager import PocketBaseCacheManager
+cache_manager = PocketBaseCacheManager()
 
 # --- KHỞI TẠO CONNECTION MANAGER CHO WEBSOCKETS ---
 class ConnectionManager:
@@ -183,9 +190,19 @@ async def api_team_info(team_id: int):
     """
     Lấy chi tiết thông tin về một câu lạc bộ bóng đá
     """
+    # 1. Thử lấy từ cache PocketBase trước
+    cached_data = await cache_manager.get_team_cache(team_id)
+    if cached_data:
+        return cached_data
+
+    # 2. Cache MISS -> Gọi wrapper để lấy dữ liệu mới
     try:
         team_obj = Team(api_instance, team_id=team_id)
         res = await team_obj.get_team()
+        
+        # 3. Ghi cache ngầm
+        asyncio.create_task(cache_manager.set_team_cache(team_id, res))
+        
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -211,9 +228,19 @@ async def api_team_squad(team_id: int):
     """
     Lấy danh sách đội hình cầu thủ của câu lạc bộ
     """
+    # 1. Thử lấy từ cache PocketBase trước
+    cached_data = await cache_manager.get_squad_cache(team_id)
+    if cached_data:
+        return cached_data
+
+    # 2. Cache MISS -> Gọi wrapper
     try:
         team_obj = Team(api_instance, team_id=team_id)
         res = await team_obj.squad()
+        
+        # 3. Ghi cache ngầm
+        asyncio.create_task(cache_manager.set_squad_cache(team_id, res))
+        
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -223,10 +250,20 @@ async def api_player_detail(player_id: int):
     """
     Lấy thông tin chi tiết và chỉ số kỹ thuật của một cầu thủ
     """
+    # 1. Thử lấy từ cache PocketBase trước
+    cached_data = await cache_manager.get_player_cache(player_id)
+    if cached_data:
+        return cached_data
+
+    # 2. Cache MISS -> Gọi wrapper
     try:
         player_obj = Player(api_instance, player_id=player_id)
         detail = await player_obj.get_player()
         attrs = await player_obj.attributes()
+        
+        # 3. Ghi cache ngầm
+        asyncio.create_task(cache_manager.set_player_cache(player_id, detail, attrs))
+        
         return {
             "player": detail.get("player", {}),
             "attributes": attrs
@@ -249,11 +286,40 @@ async def api_league_standings(league_id: int, season: Optional[int] = None):
                 raise Exception("Không thể tự động tìm thấy mùa giải hiện tại cho giải đấu này.")
             season = season_obj["id"]
             
+        # 1. Thử lấy từ cache PocketBase trước
+        cached_data = await cache_manager.get_league_cache(league_id, season)
+        if cached_data:
+            return cached_data
+
+        # 2. Cache MISS -> Gọi wrapper để lấy dữ liệu mới từ Sofascore
         res = await league_obj.standings(season)
-        return {
+        
+        # Lấy thêm thông tin chi tiết giải đấu để điền vào cache (Name, Country, Flag)
+        try:
+            league_info = await league_obj.get_league()
+            name = league_info.get("name", "")
+            country = league_info.get("category", {}).get("name", "")
+            flag = league_info.get("category", {}).get("flag", "")
+        except Exception as info_err:
+            print(f"[Server Warning] Không lấy được thông tin chi tiết giải đấu {league_id}: {info_err}")
+            name, country, flag = "", "", ""
+
+        response_data = {
             "season_id": season,
             "standings": res
         }
+
+        # 3. Ghi cache ngầm
+        asyncio.create_task(cache_manager.set_league_cache(
+            league_id=league_id,
+            season_id=season,
+            raw_json=response_data,
+            name=name,
+            country=country,
+            flag=flag
+        ))
+        
+        return response_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
